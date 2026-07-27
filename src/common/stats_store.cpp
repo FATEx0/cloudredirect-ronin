@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cstring>
 #include <thread>
+#include <unistd.h>
 #include <unordered_set>
 #include <condition_variable>
 
