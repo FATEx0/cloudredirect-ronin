@@ -52,7 +52,17 @@ static char g_crashContext[192] = "none";
 static void DebugLog(const char* msg)
 {
     if (g_debugFd < 0) {
-        std::string path = XdgConfigHome() + "/CloudRedirect/cr_debug.log";
+        std::string dir = XdgConfigHome() + "/CloudRedirect";
+        // On a truly fresh install (no prior run has created this directory
+        // yet, e.g. under Tsuki before any other component has), open()
+        // alone fails closed with ENOENT and this raw diagnostic channel --
+        // meant to survive even a broken C++ runtime -- goes silently dark
+        // for the entire process lifetime. Found via an isolated slow-boot
+        // test harness (no real Steam involved) that used a pristine scratch
+        // $HOME.
+        std::error_code ec;
+        std::filesystem::create_directories(dir, ec);
+        std::string path = dir + "/cr_debug.log";
         g_debugFd = open(path.c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
     }
     if (g_debugFd >= 0)
