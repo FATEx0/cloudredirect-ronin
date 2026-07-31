@@ -234,6 +234,15 @@ endif()
 
 enable_testing()
 
+if(NOT WIN32)
+    add_executable(linux_lua_discovery_tests
+        test/linux_lua_discovery_tests.cpp
+    )
+    target_include_directories(linux_lua_discovery_tests PRIVATE src/platform/linux)
+    add_test(NAME linux_lua_discovery_tests COMMAND linux_lua_discovery_tests)
+endif()
+
+
 if(EXISTS ${CMAKE_SOURCE_DIR}/tests/autocloud_native_tests.cpp)
     add_compile_definitions(CR_RELEASE_VERSION="${CR_RELEASE_VERSION}")
     if(WIN32)

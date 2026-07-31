@@ -3,6 +3,7 @@
 
 #include "cloud_metadata_paths.h"
 #include "common.h"
+#include <functional>
 
 namespace CloudIntercept {
 
@@ -18,6 +19,12 @@ std::vector<uint32_t> GetNamespaceApps();
 
 // Dynamically register an app as a namespace app
 void RegisterNamespaceApp(uint32_t appId);
+
+// Called for every app discovered AFTER InitLinux()'s first pass (a game added
+// mid-session). Discoveries made before the callback is installed are buffered
+// and replayed on registration, so the stats/schema layers -- which initialise
+// after InitLinux() -- never miss one.
+void SetNamespaceAppCallback(std::function<void(uint32_t)> cb);
 
 // Get the Steam installation path (with trailing slash)
 std::string GetSteamPath();
