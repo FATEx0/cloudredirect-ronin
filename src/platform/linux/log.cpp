@@ -15,27 +15,53 @@ static pthread_mutex_t g_logMutex = PTHREAD_MUTEX_INITIALIZER;
 static char g_logPathBuf[512] = {};
 static constexpr long MAX_LOG_SIZE = 10 * 1024 * 1024;
 
+#ifndef RONIN_ENV_ID
+#define RONIN_ENV_ID "CLOUDREDIRECT"
+#endif
+
 void Log::Init()
 {
     // Build paths with stack buffers only — no std::string, no heap, so this
     // is safe inside an LD_PRELOAD constructor before the C++ runtime is up.
-    const char* home = getenv("HOME");
-    if (!home || !home[0]) home = "/tmp";
-    const char* xdg = getenv("XDG_CONFIG_HOME");
 
-    char base[256];
-    if (xdg && xdg[0] == '/')
-        snprintf(base, sizeof(base), "%s/CloudRedirect", xdg);
+    // Host-managed path takes priority: interface.json declares
+    // $MODULE_LOG/cloud_redirect.log as this module's log source, so Tsuki's
+    // log-tailing feature only finds anything if we actually write there.
+    // Nothing pre-creates this directory for a steam-launch-extension
+    // component (unlike a subprocess component's env, which transport.lua
+    // does create_directories() for), so create it ourselves.
+    const char* managed = getenv("TSUKI_RONIN_LOG_FILE_" RONIN_ENV_ID);
+    if (managed && managed[0])
+    {
+        const char* slash = strrchr(managed, '/');
+        if (slash)
+        {
+            char dir[400];
+            snprintf(dir, sizeof(dir), "%.*s", (int)(slash - managed), managed);
+            mkdir(dir, 0755);
+        }
+        snprintf(g_logPathBuf, sizeof(g_logPathBuf), "%s", managed);
+    }
     else
-        snprintf(base, sizeof(base), "%s/.config/CloudRedirect", home);
+    {
+        const char* home = getenv("HOME");
+        if (!home || !home[0]) home = "/tmp";
+        const char* xdg = getenv("XDG_CONFIG_HOME");
 
-    // Ensure parent dirs exist
-    char dir[256];
-    snprintf(dir, sizeof(dir), "%.*s", (int)(strrchr(base, '/') - base), base);
-    mkdir(dir, 0755);
-    mkdir(base, 0755);
+        char base[256];
+        if (xdg && xdg[0] == '/')
+            snprintf(base, sizeof(base), "%s/CloudRedirect", xdg);
+        else
+            snprintf(base, sizeof(base), "%s/.config/CloudRedirect", home);
 
-    snprintf(g_logPathBuf, sizeof(g_logPathBuf), "%s/cloud_redirect.log", base);
+        // Ensure parent dirs exist
+        char dir[256];
+        snprintf(dir, sizeof(dir), "%.*s", (int)(strrchr(base, '/') - base), base);
+        mkdir(dir, 0755);
+        mkdir(base, 0755);
+
+        snprintf(g_logPathBuf, sizeof(g_logPathBuf), "%s/cloud_redirect.log", base);
+    }
 
     g_logFile = fopen(g_logPathBuf, "a");
     if (g_logFile) {
