@@ -118,10 +118,15 @@ documents for its own optional-pattern inventory.
 - [ ] Run the existing C++ regression suite (`test/*`) plus the two new
       Ronin tests (`linux_lua_discovery_tests`, `linux_init_stop_tests`)
       against that build.
-- [ ] Move the canonical Tsuki module manifest, settings, communication
-      declarations, assets, and defaults into `module/`.
+- [x] Move the canonical Tsuki module manifest, settings, communication
+      declarations, assets, and defaults into `module/`. Validated against
+      `ronin-module-sdk`'s schemas and `ronin_validate.py`; the one
+      remaining validator failure is `module/payload/cloud_redirect.so`
+      not existing yet (see the build-environment item above).
 - [ ] Add one build/package target that produces the native payload and
-      complete self-contained Tsuki module from the same revision.
+      complete self-contained Tsuki module from the same revision. Blocked
+      on the build-environment item above; `slssteam-ronin`'s
+      `Makefile`/`scripts/deploy-tsuki-module.sh` is the template to adapt.
 - [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
       and RONIN-CLOUD-4 (slow-boot steamclient attach) against a real Steam
       session.
