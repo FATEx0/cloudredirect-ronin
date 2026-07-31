@@ -126,27 +126,35 @@ documents for its own optional-pattern inventory.
       declarations, assets, and defaults into `module/`, including the real
       built `module/payload/cloud_redirect.so` and its `module/SOURCE`
       provenance record.
-- [ ] `ronin_validate.py` now fails on one real design gap instead of the
-      missing binary: a `steam-launch-extension` component must declare
-      `runtime-evidence` readiness, not `mapped-library`, in
-      `interface.json`. `slssteam-ronin` satisfies this through its
-      `slssteam-control` companion's `health.evidence.get` export
-      (`companion-export` carrier); this package has no companion process.
-      The schema also allows a `runtime-file` carrier with no companion, but
-      that requires the payload to actually write a structured evidence file
-      Tsuki can read -- it does not today. Fix this by either adding a small
-      evidence-file writer to the payload, or deciding a companion process is
-      warranted after all; do not declare evidence a file doesn't back.
 - [x] Add a `Makefile`/`scripts/deploy-tsuki-module.sh` analogous to
       `slssteam-ronin`'s. `make ronin-module` wraps `nix build` and stages
       the result into `module/payload/`; `make deploy-tsuki-module
       TSUKI_ROOT=...`/`rollback-tsuki-module` reuse the same atomic
-      stage-validate-install-or-abort script. Verified end to end against a
-      real Tsuki checkout: it correctly refuses to install because of the
-      runtime-evidence gap above, leaving no partial state behind.
-- [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
-      and RONIN-CLOUD-4 (slow-boot steamclient attach) against a real Steam
-      session.
-- [ ] Determine how Tsuki runs `slssteam-ronin` and `cloudredirect-ronin` as
-      two concurrent `steam-launch-extension` modules; this is host-side
-      work, not something this repository's package alone can validate.
+      stage-validate-install-or-abort script.
+- [x] Close the `runtime-evidence` health gap (RONIN-CLOUD-7): the payload
+      writes its own readiness record via the `runtime-file` evidence
+      carrier (no companion process needed), which required a small,
+      generically useful addition to Tsuki's `lua/roninmodule.lua` (it
+      previously only understood `companion-export`). `ronin_validate.py`
+      now passes clean, and `make deploy-tsuki-module` actually installs
+      into a real Tsuki checkout -- verified against that checkout's own
+      `tools/test_cloudredirect_manifest.lua` (6/6 passing) and a live
+      `roninpackage.load()` + `project_component()` check resolving the
+      exact `runtime_dir` path the payload writes to.
+- [x] Determine how Tsuki runs `slssteam-ronin` and `cloudredirect-ronin` as
+      two concurrent `steam-launch-extension` modules. Fixed a real bug in
+      `lua/steamlaunchext.lua`: fixed runtime-binding env vars
+      (`TSUKI_RONIN_LOG_FILE` etc.) were global, unnamespaced names, so a
+      second enabled module with different paths than the first got
+      refused outright by the host's own conflict check. Now namespaced per
+      module id; verified with a real two-module concurrent-plan test
+      (`tools/test_steamlaunchext.lua`) proving `slsteam` (audit-library)
+      and `cloudredirect` (preload-library) both stay enabled with no
+      conflicts. `slssteam-ronin`'s payload updated to match (also fixed to
+      derive its own env-var suffix from `module/module.json` at build
+      time rather than hardcoding it, mirroring this repo's `RONIN_ENV_ID`).
+- [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery),
+      RONIN-CLOUD-4 (slow-boot steamclient attach), and RONIN-CLOUD-7
+      (runtime-evidence health reporting) against a real Steam session --
+      ideally with `slssteam-ronin` also enabled, now that both can run
+      concurrently.

@@ -1,5 +1,5 @@
 Repository: https://github.com/FATEx0/cloudredirect-ronin
-Base commit: 160076eebc5f238948146664fb6b196f9c61ddfa
+Base commit: 9137b00fe4c250029e043d4cf9b7f556f72ee9a2
 
 Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
 (genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
@@ -23,15 +23,19 @@ module/payload/), the same target `make deploy-tsuki-module` and
 
 Packaged artifacts:
 
-7897472841f3492adbbf9c298b25fcf4a9d6b49cddd99da4d62fcd46b0c2674f  payload/cloud_redirect.so
+e3d9e89ff95b0a83b3de6367e1959d06aa4a49b30ce25f87c50d94edd9223455  payload/cloud_redirect.so
 
-Known gap: `ronin_validate.py` from ronin-module-sdk still fails on
-`interface.json` -- a `steam-launch-extension` component must declare
-`runtime-evidence` readiness, not `mapped-library`. slssteam-ronin satisfies
-this through its `slssteam-control` companion's `health.evidence.get`
-export (carrier `companion-export`); this package has no companion process.
-The schema also allows a `runtime-file` carrier with no companion needed,
-but that requires the payload to actually write a structured evidence file
-Tsuki can read, which it does not do today. Fabricating that declaration
-without the payload backing it would be dishonest; this is real follow-up
-work, not a packaging afterthought. See docs/RONIN.md port status.
+`ronin_validate.py` from ronin-module-sdk passes clean (zero failures) as
+of this revision. The runtime-evidence gap noted in earlier revisions of
+this file is closed: `interface.json` declares the `cloud-hook` component's
+health readiness as `runtime-evidence` with carrier `runtime-file`, and
+`src/platform/linux/init.cpp`'s `PublishRoninEvidence()` writes the backing
+record (`observed_at`, `process_instance`, `status`) to
+`$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` once hooks are
+confirmed installed. This required a small addition to Tsuki itself
+(`lua/roninmodule.lua` gained a `runtime-file` evidence reader; it
+previously only understood `companion-export`, which this
+companion-less package can't use). Verified end to end: `make
+deploy-tsuki-module` actually installs into a real Tsuki checkout, and
+that checkout's own `tools/test_cloudredirect_manifest.lua` passes 6/6
+against the installed package.

@@ -245,6 +245,57 @@ motivation docs). No design overlap to preserve.
 
 Retire if upstream adopts an equivalent cooperative shutdown signal.
 
+## RONIN-CLOUD-7: Ronin runtime-evidence readiness record
+
+**Requirement**
+
+Let Tsuki determine this package's `steam-hooks`-equivalent component
+(`cloud-hook`) is genuinely running, not just that its library is mapped, by
+declaring `runtime-evidence` health readiness the way every other Ronin
+`steam-launch-extension` component must (`ronin_validate.py` rejects plain
+`mapped-library` readiness for that component kind).
+
+**Why upstream does not satisfy it**
+
+This is a Ronin/Tsuki host contract, not a CloudRedirect concern; upstream
+has no notion of it.
+
+**Implementation**
+
+- `src/platform/linux/init.cpp`'s `PublishRoninEvidence()` writes
+  `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` (`observed_at`,
+  `process_instance`, `status`) once hooks are confirmed installed.
+  `RONIN_ENV_ID` (the `CLOUDREDIRECT` suffix) is generated at CMake
+  configure time from `module/module.json`'s own `id` field, never
+  hand-duplicated.
+- `module/interface.json` declares this as `carrier: "runtime-file"`,
+  `producer: "cloud-hook"` — this package has no companion process to use
+  `companion-export` the way `slssteam-ronin`'s `slssteam-control` does.
+- Required a small, generically useful addition to Tsuki itself:
+  `lua/roninmodule.lua` previously only understood the `companion-export`
+  carrier; it now also reads a fixed-name `ready.json` from the producer's
+  resolved `runtime_dir` for `runtime-file`, applying the identical
+  size/staleness/process-identity/status checks either way.
+
+**Acceptance**
+
+- `ronin_validate.py` passes clean.
+- `make deploy-tsuki-module` installs into a real Tsuki checkout, and that
+  checkout's `tools/test_cloudredirect_manifest.lua` passes against the
+  installed package.
+- Tsuki's own `tools/test_roninmodule.lua` covers the `runtime-file` carrier
+  (fresh/stale/missing-file cases) against the same code path.
+
+**Upstream overlap**
+
+None — purely a Ronin/Tsuki host contract.
+
+**Retirement**
+
+Retire only if this package grows a real companion process for some other
+reason and adopts `companion-export` instead, or if Tsuki's evidence
+contract changes shape.
+
 ## Explicitly retired Moon integration
 
 `swwayps/cloudredirect-moon` forked from Selectively11/CloudRedirect at
