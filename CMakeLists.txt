@@ -240,6 +240,13 @@ if(NOT WIN32)
     )
     target_include_directories(linux_lua_discovery_tests PRIVATE src/platform/linux)
     add_test(NAME linux_lua_discovery_tests COMMAND linux_lua_discovery_tests)
+
+    add_executable(linux_init_stop_tests
+        test/linux_init_stop_tests.cpp
+    )
+    target_include_directories(linux_init_stop_tests PRIVATE src/platform/linux)
+    target_link_libraries(linux_init_stop_tests PRIVATE pthread)
+    add_test(NAME linux_init_stop_tests COMMAND linux_init_stop_tests)
 endif()
 
 

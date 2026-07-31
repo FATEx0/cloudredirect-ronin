@@ -1,6 +1,8 @@
 #include "vtable_hook.h"
+#include "init_stop.h"
 #include "log.h"
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <cinttypes>
@@ -242,7 +244,13 @@ void** VtableHook::FindTransportVtable(uintptr_t steamBase, size_t steamSize)
         const int maxWaitMs = 30000;  // 30 seconds max
         while (*nameSlot != rttiStrAddr && waitMs < maxWaitMs)
         {
-            usleep(50000);  // 50ms
+            // Sleeping on the stop signal so an exiting process cancels the wait
+            // instead of holding OnUnload's join open for the rest of it.
+            if (LinuxInitStop::ProcessStop().WaitFor(std::chrono::milliseconds(50)))
+            {
+                Log::Info("Relocation wait stopped early after %dms (process exiting)", waitMs);
+                return nullptr;
+            }
             waitMs += 50;
         }
         if (*nameSlot != rttiStrAddr)
@@ -554,7 +562,13 @@ void** VtableHook::FindVtableByRTTIName(const char* mangledName,
         const int maxWaitMs = 30000;
         while (*nameSlot != rttiStrAddr && waitMs < maxWaitMs)
         {
-            usleep(50000);
+            // Same cancellable sleep as the transport-vtable relocation wait.
+            if (LinuxInitStop::ProcessStop().WaitFor(std::chrono::milliseconds(50)))
+            {
+                Log::Info("relocation wait for '%s' stopped early after %dms (process exiting)",
+                          mangledName, waitMs);
+                return nullptr;
+            }
             waitMs += 50;
         }
         if (*nameSlot != rttiStrAddr)

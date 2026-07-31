@@ -12,6 +12,7 @@ const char* CR_GetVersion() { return CR_VERSION_STRING; }
 #include "cloud_intercept.h"
 #include "cloud_storage.h"
 #include "http_server.h"
+#include "init_stop.h"
 #include "legacy_metadata_cleanup.h"
 #include "log.h"
 #include "rpc_handlers.h"
@@ -546,13 +547,21 @@ static void* DeferredInitThread(void*)
     // would time out and never attach. Poll with a generous bound instead so the
     // single LD_PRELOAD load path works universally, only initialising once
     // steamclient is present.
+    //
+    // The sleep between probes runs on the stop signal so a process that exits
+    // before steamclient appears (bootstrapper/updater, -shutdown, handover)
+    // cancels the remaining window instead of holding OnUnload's join open.
     DebugLog("[CR] DeferredInit: waiting for steamclient.so\n");
-    bool mapped = false;
-    for (int i = 0; i < 240; i++) {  // up to 120 seconds
-        if (SteamclientMapped()) { mapped = true; break; }
-        usleep(500000);
+    const auto outcome = LinuxInitStop::PollUntilReady(
+        LinuxInitStop::ProcessStop(), 240, std::chrono::milliseconds(500),
+        SteamclientMapped);  // 240 x 500ms = up to 120 seconds
+    if (outcome == LinuxInitStop::PollOutcome::Stopped) {
+        DebugLog("[CR] DeferredInit: stopped early, process is exiting before steamclient.so mapped\n");
+        Log::Info("Init stopped early: process exiting before steamclient.so mapped");
+        g_initThreadDone.store(true, std::memory_order_release);
+        return nullptr;
     }
-    if (!mapped) {
+    if (outcome != LinuxInitStop::PollOutcome::Ready) {
         DebugLog("[CR] DeferredInit: steamclient.so never mapped within window, aborting\n");
         Log::Error("Init aborted: steamclient.so not mapped within wait window");
         g_initThreadDone.store(true, std::memory_order_release);
@@ -621,9 +630,12 @@ static void OnUnload()
 {
     DebugLog("[CR] OnUnload: shutting down\n");
 
-    // Wait for the init thread to finish so we don't unmap code it's executing.
-    // The thread runs for ~2s (usleep) + init time, so this is bounded.
     if (g_hookAttempted.load(std::memory_order_acquire)) {
+        // Tell the init thread's wait loops to give up before joining it: the
+        // attach poll alone runs up to 120s, so an unsignalled join would keep
+        // this process alive for the rest of that window. The join itself is
+        // kept so we never unmap code the thread is still executing.
+        LinuxInitStop::ProcessStop().Request();
         if (!g_initThreadDone.load(std::memory_order_acquire)) {
             DebugLog("[CR] OnUnload: waiting for init thread\n");
             pthread_join(g_initThread, nullptr);
