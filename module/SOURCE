@@ -1,5 +1,5 @@
 Repository: https://github.com/FATEx0/cloudredirect-ronin
-Base commit: 22f64009923a62acd394478bb993f8df5f7044e9
+Base commit: 71494b41fb336590e5f4741d26c508623e27b0ab
 
 Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
 (genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
@@ -23,30 +23,43 @@ module/payload/), the same target `make deploy-tsuki-module` and
 
 Packaged artifacts:
 
-5ec95299d6305aac3ff8b8893494d4bf227fdd187da8b4fc886c8b686277fdd1  payload/cloud_redirect.so
+29f0afebeffbb8ee74c34388b9e2e365a6f3dd5c2668e414b67b5303deaf5a8e  payload/cloud_redirect.so
 
 `ronin_validate.py` from ronin-module-sdk passes clean (zero failures) as
 of this revision.
 
-**Live acceptance, 2026-07-31:** ran a real two-module Tsuki session --
-this package and `slssteam-ronin` both active, injected into the same real
-32-bit Steam process (via a NixOS `bwrap`-sandboxed launch;
-`ubuntu12_32/steam`) simultaneously. Confirmed via `/proc/<pid>/maps`:
-`cloud_redirect.so` (LD_PRELOAD) and `SLSsteam.so`/`library-inject.so`
-(LD_AUDIT) all mapped into the same process with no env-var collisions
-(required a namespacing fix in Tsuki's `steamlaunchext.lua`, see
-[[tsuki_multi_launch_extension]] memory). Both fully initialized: this
-package's log showed transport hooks installed on slots 5/7/8,
-`IsCloudEnabledForApp` hook installed, GamesPlayed CCM detour installed.
-`$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was written with the
-real Steam PID and a fresh timestamp -- the `runtime-file` evidence
-carrier (RONIN-CLOUD-7) confirmed working against a live host.
+**Live acceptance, 2026-07-31 (RONIN-CLOUD-7, and a two-module test):** ran
+a real two-module Tsuki session -- this package and `slssteam-ronin` both
+active, injected into the same real 32-bit Steam process (via a NixOS
+`bwrap`-sandboxed launch; `ubuntu12_32/steam`) simultaneously. Confirmed via
+`/proc/<pid>/maps`: `cloud_redirect.so` (LD_PRELOAD) and
+`SLSsteam.so`/`library-inject.so` (LD_AUDIT) all mapped into the same
+process with no env-var collisions (required a namespacing fix in Tsuki's
+`steamlaunchext.lua`, see [[tsuki_multi_launch_extension]] memory). Both
+fully initialized. `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was
+written with the real Steam PID -- the `runtime-file` evidence carrier
+(RONIN-CLOUD-7) confirmed working against a live host. Found and fixed in
+that pass: `Log::Init()` didn't read `TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT`;
+re-verified live in a follow-up session.
 
-Found and fixed in the same session: `Log::Init()` never actually read
-`TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT` -- it always wrote to its own
-default `~/.config/CloudRedirect/cloud_redirect.log` regardless of the
-host-managed path `interface.json` declares. Confirmed live (the log
-existed and was correct, just at the wrong path); fixed to check the env
-var first, mirroring `slssteam-ronin`'s `src/log.cpp`. This revision's
-hash is the fix; not yet re-verified live (the fix mirrors the
-already-proven `TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT` pattern exactly).
+**Live acceptance (RONIN-CLOUD-1), same day, follow-up session:** with the
+two-module session running, wrote a new `<appid>.lua` into
+`<Steam>/config/stplug-in/` mid-session. Within one watch cycle:
+`namespace app <id> (source: stplug-in)`, `1 new` -- discovery fires
+without a restart. Stats-seeding correctly stayed off (no `config.json` ->
+`sync_achievements`/`sync_playtime` default `false`) -- expected, not a gap.
+
+**RONIN-CLOUD-4, tested via an isolated harness (no real Steam involved):**
+every live session had resolved the `steamclient.so` poll on the first
+check, so built a throwaway 32-bit process (named literally "steam" --
+`OnLoad()`'s constructor gates on that name or an already-mapped
+steamclient.so) that dlopen'd a fake stand-in `steamclient.so` 3 real
+seconds after start. Precise timing proof: `waiting for steamclient.so` at
+t=+0.000s, `starting` at t=+3.000s -- confirms the poll genuinely waits
+across multiple ~500ms iterations, not an instant resolution, with zero
+risk to any real Steam install. Found and fixed in the same pass:
+`DebugLog()` had no `mkdir()` before its `open()` (unlike `Log::Init()`'s
+default path), so on a genuinely fresh install (no prior
+`~/.config/CloudRedirect/`) it failed closed with `ENOENT` and stayed
+silent for the whole process. Reproduced and confirmed fixed with the same
+harness technique, pristine scratch `$HOME`.

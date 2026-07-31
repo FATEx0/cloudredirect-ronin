@@ -166,11 +166,26 @@ the time CloudRedirect initialized.
 
 - `2328288` (cherry-picked) — `src/platform/linux/init.cpp`: poll up to 120s
   for `steamclient.so`, drop the redundant notification.
+- 2026-07-31 — `DebugLog()` gained a `mkdir()` before its `open()` call,
+  mirroring `Log::Init()`'s default path. Found via the isolated harness
+  test below: on a genuinely fresh install (no prior
+  `~/.config/CloudRedirect/`), `open()` failed closed with `ENOENT` and
+  this raw diagnostic channel — whose whole purpose is to survive even a
+  broken C++ runtime — went silently dark for the entire process.
 
 **Acceptance**
 
-- Existing `init` regression coverage; live slow-boot attach is a Tsuki-side
-  acceptance item since Tsuki owns the Steam launch lifecycle.
+- Existing `init` regression coverage.
+- Live, 2026-07-31, via an isolated harness (not the real Steam install):
+  a throwaway 32-bit process literally named `steam` (`OnLoad()`'s
+  constructor gates on that name or an already-mapped `steamclient.so`)
+  dlopen'd a fake stand-in `steamclient.so` 3 real seconds after start.
+  Precise timing proof from the debug log: `waiting for steamclient.so` at
+  t=+0.000s, `starting` at t=+3.000s — confirms the poll genuinely waits
+  across multiple ~500ms iterations rather than resolving instantly, with
+  zero risk to any real Steam install (every live test against the real
+  installation so far had resolved on the first check, so this branch had
+  never actually run end-to-end before).
 
 **Upstream overlap**
 

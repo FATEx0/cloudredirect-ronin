@@ -175,17 +175,15 @@ documents for its own optional-pattern inventory.
       both default `false` with no `config.json` present, per
       `src/common/metadata_sync.cpp`) — expected, not a bug; the discovery/
       namespace-registration requirement itself is what's confirmed.
-- [ ] Live-validate RONIN-CLOUD-4 (slow-boot steamclient attach)
-      specifically. Every live session so far (including the one above)
-      resolved the `steamclient.so` presence poll on its very first check —
-      `cr_debug.log` shows `waiting for steamclient.so` immediately followed
-      by `starting`, every time, so the genuinely-multi-iteration branch has
-      never been exercised end-to-end. The underlying poll primitive itself
-      *is* thoroughly covered (`test/linux_init_stop_tests.cpp`:
-      delayed-true predicates, full-ceiling timeout, stop-signal
-      cancellation, all passing) — what's untested is specifically forcing
-      a real slow `steamclient.so` mapping. Doing that against the real
-      Steam install (e.g. temporarily moving the real
-      `ubuntu12_32/steamclient.so`) risks breaking Steam's own bootstrap,
-      not just this hook's attach path — a real risk/reward call, not
-      attempted without explicit sign-off.
+- [x] Live-validate RONIN-CLOUD-4 (slow-boot steamclient attach), via an
+      isolated harness rather than the real Steam install (2026-07-31):
+      every real Steam session had resolved the presence poll on its first
+      check, so building a throwaway 32-bit process named literally
+      `steam` (satisfying `OnLoad()`'s constructor gate without needing a
+      real Steam) that dlopen'd a fake stand-in `steamclient.so` 3 real
+      seconds after start gave precise timing proof: `waiting for
+      steamclient.so` at t=+0.000s, `starting` at t=+3.000s. Confirms the
+      poll genuinely waits across multiple ~500ms iterations, with zero
+      risk to any real Steam install. Found and fixed in the same pass:
+      `DebugLog()` had no `mkdir()` before its `open()`, so it silently
+      never wrote anything on a genuinely fresh install.
