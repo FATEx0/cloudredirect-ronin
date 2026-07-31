@@ -1,6 +1,7 @@
 build/
 build-*/
 dist/
+/result
 ui/bin/
 ui/obj/
 ui/publish/
