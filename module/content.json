@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "package_artifacts": [
+    {
+      "path": "payload/cloud_redirect.so",
+      "class": "target-payload"
+    }
+  ],
+  "runtime_content": []
+}

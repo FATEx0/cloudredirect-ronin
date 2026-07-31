@@ -1,0 +1,16 @@
+{
+  "schema_version": "2.0",
+  "storage": {
+    "adapter": "tsuki-json",
+    "path": "$MODULE_CONFIG/settings.json",
+    "atomic": true,
+    "ownership": {
+      "mode": "host",
+      "revisioned": true
+    }
+  },
+  "groups": [
+    { "id": "general", "label": "General", "order": 0 }
+  ],
+  "fields": []
+}

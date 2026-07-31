@@ -1,0 +1,101 @@
+{
+  "spec_version": "3.0",
+  "id": "cloudredirect",
+  "name": "CloudRedirect",
+  "version": "0.1.0",
+  "description": "Upstream-first Steam Cloud redirection extension for Lua-managed and native games.",
+  "repository": "https://github.com/FATEx0/cloudredirect-ronin",
+  "features": [
+    "cloud-save-redirection",
+    "lua-managed-app-discovery",
+    "stats-export"
+  ],
+  "capabilities": [
+    {
+      "id": "steam.launch.preload-library",
+      "reason": "Install the CloudRedirect hook at Steam launch"
+    },
+    {
+      "id": "filesystem.steam-read",
+      "reason": "Discover namespace apps from stplug-in scripts, luaappids.yaml, config.yaml and installed appmanifests"
+    },
+    {
+      "id": "filesystem.data",
+      "reason": "Persist cloud-save CAS blobs and local metadata store entries"
+    },
+    {
+      "id": "filesystem.config",
+      "reason": "Read/write CloudRedirect's own provider configuration"
+    },
+    {
+      "id": "secrets.read",
+      "reason": "Read locally-stored provider OAuth tokens from the legacy token store"
+    },
+    {
+      "id": "mutation.high-impact",
+      "resource_classes": ["steam-app-install"],
+      "reason": "Write the exported SLSsteam NO_CONNECTION-fallback stats blob into Steam's appcache/stats"
+    },
+    {
+      "id": "network.outbound",
+      "reason": "Sync cloud saves against the user-configured provider (Google Drive, OneDrive, S3-compatible, or local disk)"
+    },
+    {
+      "id": "network.listen.loopback",
+      "reason": "Run the local OAuth-callback HTTP listener on an OS-assigned loopback port"
+    },
+    {
+      "id": "notifications.desktop",
+      "reason": "Show optional cloud-sync status notifications"
+    }
+  ],
+  "compatibility_profiles": [
+    {
+      "id": "ronin-2-broad-steam-filesystem",
+      "reason": "Injected legacy code still discovers namespace apps and writes the stats blob directly under Steam's install tree instead of through operation-scoped grants",
+      "removal_milestone": "cloudredirect-grant-handles"
+    },
+    {
+      "id": "ronin-2-ambient-network",
+      "reason": "Injected legacy provider transport still resolves cloud-provider origins internally rather than through declared, grantable origins",
+      "removal_milestone": "cloudredirect-network-grants"
+    },
+    {
+      "id": "ronin-2-secrets-read",
+      "reason": "Provider OAuth tokens are read/written by the legacy token store directly, not through a Tsuki-managed secret",
+      "removal_milestone": "cloudredirect-secrets-integration"
+    }
+  ],
+  "dependencies": [],
+  "runtime": {
+    "components": [
+      {
+        "id": "cloud-hook",
+        "kind": "steam-launch-extension",
+        "activation": "enabled",
+        "apply": "steam-restart",
+        "artifacts": [
+          {
+            "path": "payload/cloud_redirect.so",
+            "role": "preload-library",
+            "order": 0
+          }
+        ],
+        "health": {
+          "kind": "mapped-library",
+          "process": "steam",
+          "artifact": "payload/cloud_redirect.so",
+          "grace_ms": 20000
+        }
+      }
+    ],
+    "activation_order": ["cloud-hook"],
+    "shutdown_order": ["cloud-hook"]
+  },
+  "documents": {
+    "settings": "settings.json",
+    "interface": "interface.json",
+    "resources": "resources.json",
+    "content": "content.json"
+  }
+}

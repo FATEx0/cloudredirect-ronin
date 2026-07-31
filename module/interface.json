@@ -1,0 +1,39 @@
+{
+  "schema_version": "2.0",
+  "limits": {
+    "max_request_bytes": 65536,
+    "max_response_bytes": 65536,
+    "max_event_bytes": 65536,
+    "max_outstanding_requests": 16
+  },
+  "control": [],
+  "imports": [],
+  "event_imports": [],
+  "exports": [],
+  "events": [],
+  "logging": {
+    "sources": [
+      {
+        "kind": "line-file",
+        "path": "$MODULE_LOG/cloud_redirect.log",
+        "format": "bracket-level-lines",
+        "max_line_bytes": 65536
+      }
+    ]
+  },
+  "health": {
+    "aggregate": "all-required",
+    "components": [
+      {
+        "component": "cloud-hook",
+        "required": true,
+        "readiness": {
+          "kind": "mapped-library",
+          "timeout_ms": 20000
+        }
+      }
+    ],
+    "features": []
+  },
+  "private_resources": []
+}
