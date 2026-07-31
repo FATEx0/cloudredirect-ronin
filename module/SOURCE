@@ -1,5 +1,5 @@
 Repository: https://github.com/FATEx0/cloudredirect-ronin
-Base commit: 9137b00fe4c250029e043d4cf9b7f556f72ee9a2
+Base commit: 22f64009923a62acd394478bb993f8df5f7044e9
 
 Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
 (genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
@@ -23,19 +23,30 @@ module/payload/), the same target `make deploy-tsuki-module` and
 
 Packaged artifacts:
 
-e3d9e89ff95b0a83b3de6367e1959d06aa4a49b30ce25f87c50d94edd9223455  payload/cloud_redirect.so
+5ec95299d6305aac3ff8b8893494d4bf227fdd187da8b4fc886c8b686277fdd1  payload/cloud_redirect.so
 
 `ronin_validate.py` from ronin-module-sdk passes clean (zero failures) as
-of this revision. The runtime-evidence gap noted in earlier revisions of
-this file is closed: `interface.json` declares the `cloud-hook` component's
-health readiness as `runtime-evidence` with carrier `runtime-file`, and
-`src/platform/linux/init.cpp`'s `PublishRoninEvidence()` writes the backing
-record (`observed_at`, `process_instance`, `status`) to
-`$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` once hooks are
-confirmed installed. This required a small addition to Tsuki itself
-(`lua/roninmodule.lua` gained a `runtime-file` evidence reader; it
-previously only understood `companion-export`, which this
-companion-less package can't use). Verified end to end: `make
-deploy-tsuki-module` actually installs into a real Tsuki checkout, and
-that checkout's own `tools/test_cloudredirect_manifest.lua` passes 6/6
-against the installed package.
+of this revision.
+
+**Live acceptance, 2026-07-31:** ran a real two-module Tsuki session --
+this package and `slssteam-ronin` both active, injected into the same real
+32-bit Steam process (via a NixOS `bwrap`-sandboxed launch;
+`ubuntu12_32/steam`) simultaneously. Confirmed via `/proc/<pid>/maps`:
+`cloud_redirect.so` (LD_PRELOAD) and `SLSsteam.so`/`library-inject.so`
+(LD_AUDIT) all mapped into the same process with no env-var collisions
+(required a namespacing fix in Tsuki's `steamlaunchext.lua`, see
+[[tsuki_multi_launch_extension]] memory). Both fully initialized: this
+package's log showed transport hooks installed on slots 5/7/8,
+`IsCloudEnabledForApp` hook installed, GamesPlayed CCM detour installed.
+`$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was written with the
+real Steam PID and a fresh timestamp -- the `runtime-file` evidence
+carrier (RONIN-CLOUD-7) confirmed working against a live host.
+
+Found and fixed in the same session: `Log::Init()` never actually read
+`TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT` -- it always wrote to its own
+default `~/.config/CloudRedirect/cloud_redirect.log` regardless of the
+host-managed path `interface.json` declares. Confirmed live (the log
+existed and was correct, just at the wrong path); fixed to check the env
+var first, mirroring `slssteam-ronin`'s `src/log.cpp`. This revision's
+hash is the fix; not yet re-verified live (the fix mirrors the
+already-proven `TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT` pattern exactly).

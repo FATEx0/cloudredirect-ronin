@@ -153,8 +153,18 @@ documents for its own optional-pattern inventory.
       conflicts. `slssteam-ronin`'s payload updated to match (also fixed to
       derive its own env-var suffix from `module/module.json` at build
       time rather than hardcoding it, mirroring this repo's `RONIN_ENV_ID`).
-- [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery),
-      RONIN-CLOUD-4 (slow-boot steamclient attach), and RONIN-CLOUD-7
-      (runtime-evidence health reporting) against a real Steam session --
-      ideally with `slssteam-ronin` also enabled, now that both can run
-      concurrently.
+- [x] Live-validate RONIN-CLOUD-7 (runtime-evidence health reporting)
+      against a real Steam session with `slssteam-ronin` also enabled
+      (2026-07-31): both payloads mapped into the same real 32-bit Steam
+      process with no conflicts, both fully initialized (hooks installed,
+      log output confirms normal operation), and
+      `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was written with
+      the real Steam PID. Found and fixed in the same pass: `Log::Init()`
+      never read `TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT`, always writing to
+      its own default path instead of the one `interface.json` declares
+      (fix not yet re-verified live, though it mirrors the
+      already-proven-live `RUNTIME_DIR` pattern exactly).
+- [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
+      and RONIN-CLOUD-4 (slow-boot steamclient attach) specifically —
+      the session above proved concurrent operation but didn't exercise a
+      mid-session app addition or a slow-boot attach race.
