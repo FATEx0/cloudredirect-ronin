@@ -3,7 +3,7 @@
   "package_artifacts": [
     {
       "path": "payload/cloud_redirect.so",
-      "class": "target-payload"
+      "class": "module-executable"
     }
   ],
   "runtime_content": []

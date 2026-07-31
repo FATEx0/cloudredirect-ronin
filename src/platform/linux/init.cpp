@@ -28,10 +28,13 @@ const char* CR_GetVersion() { return CR_VERSION_STRING; }
 #include <execinfo.h>
 #include <cstring>
 #include <cstdio>
+#include <cstdlib>
+#include <ctime>
 #include <atomic>
 #include <string>
 #include <cstdint>
 #include <pthread.h>
+#include <filesystem>
 
 static VtableHook::VtableInfo g_vtableInfo{};
 static VtableHook::CloudEnabledHookInfo g_cloudEnabledInfo{};
@@ -163,6 +166,94 @@ static void CleanLdPreload()
         setenv("LD_PRELOAD", cleaned.c_str(), 1);
 }
 
+#ifndef RONIN_ENV_ID
+#define RONIN_ENV_ID "CLOUDREDIRECT"
+#endif
+
+// Own /proc/<pid>/stat field 22 (start time in clock ticks since boot).
+// Mirrors Tsuki's roninmodule.lua process_instance_current() exactly: skip
+// past "<pid> (<comm>) " using the LAST ')' in the line (comm can itself
+// contain parens, but no later field can), then count space-separated
+// fields from 3 up to 22.
+static unsigned long long OwnProcessStartTicks()
+{
+    char statPath[64];
+    snprintf(statPath, sizeof(statPath), "/proc/%d/stat", getpid());
+    FILE* f = fopen(statPath, "r");
+    if (!f) return 0;
+    char buf[512] = {};
+    size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+    fclose(f);
+    buf[n] = '\0';
+
+    char* rparen = strrchr(buf, ')');
+    if (!rparen) return 0;
+
+    int fieldIndex = 2;
+    char* tok = strtok(rparen + 1, " ");
+    while (tok)
+    {
+        ++fieldIndex;
+        if (fieldIndex == 22) return strtoull(tok, nullptr, 10);
+        tok = strtok(nullptr, " ");
+    }
+    return 0;
+}
+
+// Ronin runtime-evidence: a fixed-name JSON record inside the host-managed
+// runtime dir (TSUKI_RONIN_RUNTIME_DIR_<id>, namespaced by Tsuki's
+// steamlaunchext.lua env_id() -- RONIN_ENV_ID is generated at configure time
+// from this same module's module.json "id" field, never hand-duplicated).
+// Tsuki's roninmodule.lua reads this file directly for the "runtime-file"
+// evidence carrier declared in module/interface.json; there is no companion
+// process for CloudRedirect to expose it through an RPC export instead. A
+// missing env var means we are not running under Tsuki (standalone/dev),
+// so this is a silent no-op rather than a warning.
+static void PublishRoninEvidence()
+{
+    const char* runtimeDir = getenv("TSUKI_RONIN_RUNTIME_DIR_" RONIN_ENV_ID);
+    if (!runtimeDir || !*runtimeDir) return;
+
+    std::error_code ec;
+    std::filesystem::create_directories(runtimeDir, ec);
+    if (ec)
+    {
+        Log::Warn("Ronin evidence: failed to create runtime dir %s: %s",
+                   runtimeDir, ec.message().c_str());
+        return;
+    }
+
+    unsigned long long startTicks = OwnProcessStartTicks();
+    if (startTicks == 0)
+    {
+        Log::Warn("Ronin evidence: failed to read own process start time");
+        return;
+    }
+
+    char timestamp[32];
+    time_t now = time(nullptr);
+    struct tm utc{};
+    gmtime_r(&now, &utc);
+    strftime(timestamp, sizeof(timestamp), "%Y-%m-%dT%H:%M:%SZ", &utc);
+
+    std::string path = std::string(runtimeDir) + "/ready.json";
+    std::string tmpPath = path + ".tmp";
+    FILE* out = fopen(tmpPath.c_str(), "w");
+    if (!out)
+    {
+        Log::Warn("Ronin evidence: failed to open %s for writing", tmpPath.c_str());
+        return;
+    }
+    fprintf(out, "{\"observed_at\":\"%s\",\"process_instance\":\"%d:%llu\",\"status\":\"ready\"}\n",
+            timestamp, getpid(), startTicks);
+    fclose(out);
+    if (rename(tmpPath.c_str(), path.c_str()) != 0)
+    {
+        Log::Warn("Ronin evidence: failed to publish %s", path.c_str());
+        remove(tmpPath.c_str());
+    }
+}
+
 static void DoInit()
 {
     DebugLog("[CR] DoInit: version=" CR_VERSION_STRING " finding steamclient.so in /proc/self/maps\n");
@@ -257,6 +348,7 @@ static void DoInit()
     SteamKvInjector::Init();
 
     g_initialized.store(true, std::memory_order_release);
+    PublishRoninEvidence();
     DebugLog("[CR] DoInit: SUCCESS\n");
     Log::Info("CloudRedirect initialized successfully (all hooks active)");
     // Suppress the "Loaded successfully" desktop popup. The host stack already

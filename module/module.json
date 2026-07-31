@@ -66,7 +66,9 @@
       "removal_milestone": "cloudredirect-secrets-integration"
     }
   ],
-  "dependencies": [],
+  "dependencies": [
+    { "id": "slsteam", "optional": true }
+  ],
   "runtime": {
     "components": [
       {

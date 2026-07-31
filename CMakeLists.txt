@@ -51,6 +51,16 @@ endif()
 
 set(CR_SO_VERSION "${CR_RELEASE_VERSION}+${GIT_SHA}")
 
+# ── Read Ronin module id from module/module.json ────────────────────────
+# Single source of truth for the env-var namespace Tsuki's
+# steamlaunchext.lua uses for this module's runtime bindings (env_id():
+# upper + non-[A-Z0-9] -> "_"). Do not hardcode this token anywhere else.
+file(READ "${CMAKE_SOURCE_DIR}/module/module.json" MODULE_JSON_CONTENT)
+string(REGEX MATCH "\"id\"[ \t]*:[ \t]*\"([^\"]+)\"" _ "${MODULE_JSON_CONTENT}")
+set(RONIN_MODULE_ID "${CMAKE_MATCH_1}")
+string(TOUPPER "${RONIN_MODULE_ID}" RONIN_ENV_ID)
+string(REGEX REPLACE "[^A-Z0-9]" "_" RONIN_ENV_ID "${RONIN_ENV_ID}")
+
 # ── Common sources (platform-agnostic) ──────────────────────────────────
 
 set(COMMON_SOURCES
@@ -150,6 +160,7 @@ target_compile_definitions(cloud_redirect PRIVATE
     MINIZ_NO_STDIO
     CR_VERSION_STRING="${CR_SO_VERSION}"
     CR_RELEASE_VERSION="${CR_RELEASE_VERSION}"
+    RONIN_ENV_ID="${RONIN_ENV_ID}"
 )
 
 if(WIN32)

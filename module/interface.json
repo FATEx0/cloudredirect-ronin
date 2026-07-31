@@ -28,8 +28,14 @@
         "component": "cloud-hook",
         "required": true,
         "readiness": {
-          "kind": "mapped-library",
-          "timeout_ms": 20000
+          "kind": "runtime-evidence",
+          "evidence": {
+            "carrier": "runtime-file",
+            "producer": "cloud-hook",
+            "max_bytes": 4096,
+            "freshness_ms": 30000,
+            "compatibility_subject": "none"
+          }
         }
       }
     ],
