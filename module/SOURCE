@@ -1,5 +1,5 @@
 Repository: https://github.com/FATEx0/cloudredirect-ronin
-Base commit: 14954148e331ef3acdb455fca242b6e8b639911d
+Base commit: 160076eebc5f238948146664fb6b196f9c61ddfa
 
 Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
 (genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
@@ -17,9 +17,13 @@ this port added) both pass, built as native 64-bit binaries since both only
 exercise header-only, ABI-independent logic (lua_discovery.h, init_stop.h).
 The rest of test/*.cpp has not been run this pass.
 
+Built via `make ronin-module` (nix build .#cloud-redirect + stage into
+module/payload/), the same target `make deploy-tsuki-module` and
+`make rollback-tsuki-module` depend on.
+
 Packaged artifacts:
 
-1f0de95904cf4a095cf47b54c4b45688bf5257b9ebf8f42a818ae820866d8d86  payload/cloud_redirect.so
+7897472841f3492adbbf9c298b25fcf4a9d6b49cddd99da4d62fcd46b0c2674f  payload/cloud_redirect.so
 
 Known gap: `ronin_validate.py` from ronin-module-sdk still fails on
 `interface.json` -- a `steam-launch-extension` component must declare
