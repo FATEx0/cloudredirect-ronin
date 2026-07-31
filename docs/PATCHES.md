@@ -66,9 +66,12 @@ source. Before this patch, the only source read was `config.yaml`
 **Acceptance**
 
 - `test/linux_lua_discovery_tests.cpp`
-- Live: add a Lua script to `stplug-in/` while Steam is running and confirm
-  its cloud/stats traffic is redirected without a restart (not yet run this
-  pass; tracked in `docs/RONIN.md` port status).
+- Live, 2026-07-31: added a Lua script to `stplug-in/` mid-session against a
+  real Steam process (alongside `slssteam-ronin`, both active). Confirmed
+  `namespace app <id> (source: stplug-in)` and `stplug-in scan: ... 1 new`
+  within one watch cycle, no restart. Stats-seeding correctly stayed off
+  (`sync_achievements`/`sync_playtime` default `false` with no `config.json`
+  present) — expected given current defaults, not exercised here.
 
 **Upstream overlap**
 

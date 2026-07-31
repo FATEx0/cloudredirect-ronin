@@ -161,10 +161,31 @@ documents for its own optional-pattern inventory.
       `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was written with
       the real Steam PID. Found and fixed in the same pass: `Log::Init()`
       never read `TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT`, always writing to
-      its own default path instead of the one `interface.json` declares
-      (fix not yet re-verified live, though it mirrors the
-      already-proven-live `RUNTIME_DIR` pattern exactly).
-- [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
-      and RONIN-CLOUD-4 (slow-boot steamclient attach) specifically —
-      the session above proved concurrent operation but didn't exercise a
-      mid-session app addition or a slow-boot attach race.
+      its own default path instead of the one `interface.json` declares.
+      Re-verified live in a follow-up session (below) after the fix.
+- [x] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery),
+      same session, log-path fix confirmed live too (2026-07-31): with the
+      real live session still running, wrote a new
+      `<appid>.lua` into `<Steam>/config/stplug-in/` mid-session (atomic
+      temp-file + rename, matching real tooling). Within one watch cycle the
+      log showed `namespace app <id> (source: stplug-in)` and
+      `stplug-in scan: 3 script(s), ... 1 new` — discovery fires without a
+      restart, as required. The stats-seeding half of the late-discovery
+      callback correctly did *not* fire (`sync_achievements`/`sync_playtime`
+      both default `false` with no `config.json` present, per
+      `src/common/metadata_sync.cpp`) — expected, not a bug; the discovery/
+      namespace-registration requirement itself is what's confirmed.
+- [ ] Live-validate RONIN-CLOUD-4 (slow-boot steamclient attach)
+      specifically. Every live session so far (including the one above)
+      resolved the `steamclient.so` presence poll on its very first check —
+      `cr_debug.log` shows `waiting for steamclient.so` immediately followed
+      by `starting`, every time, so the genuinely-multi-iteration branch has
+      never been exercised end-to-end. The underlying poll primitive itself
+      *is* thoroughly covered (`test/linux_init_stop_tests.cpp`:
+      delayed-true predicates, full-ceiling timeout, stop-signal
+      cancellation, all passing) — what's untested is specifically forcing
+      a real slow `steamclient.so` mapping. Doing that against the real
+      Steam install (e.g. temporarily moving the real
+      `ubuntu12_32/steamclient.so`) risks breaking Steam's own bootstrap,
+      not just this hook's attach path — a real risk/reward call, not
+      attempted without explicit sign-off.
