@@ -12,10 +12,13 @@ libatomic.so.1, libstdc++.so.6, libm.so.6, libgcc_s.so.1, libc.so.6 -- no
 unexpected dependencies (CloudRedirect's Linux target needs no openssl/curl,
 unlike its Windows target).
 
-test/linux_lua_discovery_tests and test/linux_init_stop_tests (the two tests
-this port added) both pass, built as native 64-bit binaries since both only
-exercise header-only, ABI-independent logic (lua_discovery.h, init_stop.h).
-The rest of test/*.cpp has not been run this pass.
+test/linux_lua_discovery_tests and test/linux_init_stop_tests both pass
+(the complete test suite -- `ctest -N` confirms exactly these two are
+configured). Built as native 64-bit binaries since both only exercise
+header-only, ABI-independent logic (lua_discovery.h, init_stop.h). Every
+other test name in CMakeLists.txt is gated behind
+`if(EXISTS tests/autocloud_native_tests.cpp)`, upstream's own private
+tests/ directory that isn't part of this repo.
 
 Built via `make ronin-module` (nix build .#cloud-redirect + stage into
 module/payload/), the same target `make deploy-tsuki-module` and

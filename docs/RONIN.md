@@ -119,9 +119,15 @@ documents for its own optional-pattern inventory.
       a confirmed ELF32/Intel-80386 `.so` with a sane, minimal NEEDED list
       (libdl/libpthread/libatomic/libstdc++/libm/libgcc_s/libc only).
 - [x] Run the two new Ronin tests (`linux_lua_discovery_tests`,
-      `linux_init_stop_tests`) against that build -- both pass. They build as
-      native 64-bit binaries since both only exercise header-only,
-      ABI-independent logic; the rest of `test/*.cpp` has not been run yet.
+      `linux_init_stop_tests`) against that build -- both pass (`make test`
+      / `ctest -N` confirms these are the only two tests configured). They
+      build as native 64-bit binaries since both only exercise header-only,
+      ABI-independent logic. Every other test name in `CMakeLists.txt`
+      (`autocloud_native_tests`, `sigv4_tests`, `stats_store_tests`, etc.)
+      is gated behind `if(EXISTS tests/autocloud_native_tests.cpp)` --
+      upstream's own private `tests/` (plural) directory, deliberately
+      `.gitignore`'d and never shipped in the public repo. There is no
+      larger suite to run here; `test/` (singular) is the complete suite.
 - [x] Move the canonical Tsuki module manifest, settings, communication
       declarations, assets, and defaults into `module/`, including the real
       built `module/payload/cloud_redirect.so` and its `module/SOURCE`
