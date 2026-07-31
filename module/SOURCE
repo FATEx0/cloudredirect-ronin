@@ -1,0 +1,33 @@
+Repository: https://github.com/FATEx0/cloudredirect-ronin
+Base commit: 14954148e331ef3acdb455fca242b6e8b639911d
+
+Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
+(genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
+see nix-modules/default.nix). This sidesteps CMakeLists.txt's Fedora/Debian
+multilib-path guessing for LINUX_32BIT entirely, since CMAKE_SIZEOF_VOID_P is
+already 4 under that stdenv.
+
+Confirmed ELF32/Intel 80386. NEEDED: libdl.so.2, libpthread.so.0,
+libatomic.so.1, libstdc++.so.6, libm.so.6, libgcc_s.so.1, libc.so.6 -- no
+unexpected dependencies (CloudRedirect's Linux target needs no openssl/curl,
+unlike its Windows target).
+
+test/linux_lua_discovery_tests and test/linux_init_stop_tests (the two tests
+this port added) both pass, built as native 64-bit binaries since both only
+exercise header-only, ABI-independent logic (lua_discovery.h, init_stop.h).
+The rest of test/*.cpp has not been run this pass.
+
+Packaged artifacts:
+
+1f0de95904cf4a095cf47b54c4b45688bf5257b9ebf8f42a818ae820866d8d86  payload/cloud_redirect.so
+
+Known gap: `ronin_validate.py` from ronin-module-sdk still fails on
+`interface.json` -- a `steam-launch-extension` component must declare
+`runtime-evidence` readiness, not `mapped-library`. slssteam-ronin satisfies
+this through its `slssteam-control` companion's `health.evidence.get`
+export (carrier `companion-export`); this package has no companion process.
+The schema also allows a `runtime-file` carrier with no companion needed,
+but that requires the payload to actually write a structured evidence file
+Tsuki can read, which it does not do today. Fabricating that declaration
+without the payload backing it would be dishonest; this is real follow-up
+work, not a packaging afterthought. See docs/RONIN.md port status.

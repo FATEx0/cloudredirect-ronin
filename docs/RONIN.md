@@ -111,22 +111,35 @@ documents for its own optional-pattern inventory.
       subsystem (RONIN-CLOUD-1).
 - [x] Record retirement of the schema-fetch-dependent moon patches
       (`226c4eb`, `a2ccaeb`) in `docs/PATCHES.md`.
-- [ ] Stand up a 32-bit Linux build environment and produce a first compiled
-      `cloud_redirect.so` from `ronin/main` (this machine has no C/C++
-      toolchain configured yet; `slssteam-ronin`'s `flake.nix`/Docker
-      approach is the likely template).
-- [ ] Run the existing C++ regression suite (`test/*`) plus the two new
-      Ronin tests (`linux_lua_discovery_tests`, `linux_init_stop_tests`)
-      against that build.
+- [x] Stand up a 32-bit Linux build environment and produce a first compiled
+      `cloud_redirect.so` from `ronin/main`. `nix build .#cloud-redirect`
+      (`nix-modules/default.nix`) builds the whole tree under
+      `pkgs.pkgsi686Linux.stdenv` -- a genuine i686 toolchain, which sidesteps
+      CMakeLists.txt's Fedora/Debian multilib-path guessing entirely. Produces
+      a confirmed ELF32/Intel-80386 `.so` with a sane, minimal NEEDED list
+      (libdl/libpthread/libatomic/libstdc++/libm/libgcc_s/libc only).
+- [x] Run the two new Ronin tests (`linux_lua_discovery_tests`,
+      `linux_init_stop_tests`) against that build -- both pass. They build as
+      native 64-bit binaries since both only exercise header-only,
+      ABI-independent logic; the rest of `test/*.cpp` has not been run yet.
 - [x] Move the canonical Tsuki module manifest, settings, communication
-      declarations, assets, and defaults into `module/`. Validated against
-      `ronin-module-sdk`'s schemas and `ronin_validate.py`; the one
-      remaining validator failure is `module/payload/cloud_redirect.so`
-      not existing yet (see the build-environment item above).
-- [ ] Add one build/package target that produces the native payload and
-      complete self-contained Tsuki module from the same revision. Blocked
-      on the build-environment item above; `slssteam-ronin`'s
-      `Makefile`/`scripts/deploy-tsuki-module.sh` is the template to adapt.
+      declarations, assets, and defaults into `module/`, including the real
+      built `module/payload/cloud_redirect.so` and its `module/SOURCE`
+      provenance record.
+- [ ] `ronin_validate.py` now fails on one real design gap instead of the
+      missing binary: a `steam-launch-extension` component must declare
+      `runtime-evidence` readiness, not `mapped-library`, in
+      `interface.json`. `slssteam-ronin` satisfies this through its
+      `slssteam-control` companion's `health.evidence.get` export
+      (`companion-export` carrier); this package has no companion process.
+      The schema also allows a `runtime-file` carrier with no companion, but
+      that requires the payload to actually write a structured evidence file
+      Tsuki can read -- it does not today. Fix this by either adding a small
+      evidence-file writer to the payload, or deciding a companion process is
+      warranted after all; do not declare evidence a file doesn't back.
+- [ ] Add a `Makefile`/`scripts/deploy-tsuki-module.sh` analogous to
+      `slssteam-ronin`'s that wraps `nix build` and stages the result into
+      `module/payload/` as part of a single package/deploy target.
 - [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
       and RONIN-CLOUD-4 (slow-boot steamclient attach) against a real Steam
       session.
