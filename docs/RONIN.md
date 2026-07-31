@@ -137,9 +137,13 @@ documents for its own optional-pattern inventory.
       Tsuki can read -- it does not today. Fix this by either adding a small
       evidence-file writer to the payload, or deciding a companion process is
       warranted after all; do not declare evidence a file doesn't back.
-- [ ] Add a `Makefile`/`scripts/deploy-tsuki-module.sh` analogous to
-      `slssteam-ronin`'s that wraps `nix build` and stages the result into
-      `module/payload/` as part of a single package/deploy target.
+- [x] Add a `Makefile`/`scripts/deploy-tsuki-module.sh` analogous to
+      `slssteam-ronin`'s. `make ronin-module` wraps `nix build` and stages
+      the result into `module/payload/`; `make deploy-tsuki-module
+      TSUKI_ROOT=...`/`rollback-tsuki-module` reuse the same atomic
+      stage-validate-install-or-abort script. Verified end to end against a
+      real Tsuki checkout: it correctly refuses to install because of the
+      runtime-evidence gap above, leaving no partial state behind.
 - [ ] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery)
       and RONIN-CLOUD-4 (slow-boot steamclient attach) against a real Steam
       session.
