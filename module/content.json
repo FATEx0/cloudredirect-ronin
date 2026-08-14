@@ -4,6 +4,14 @@
     {
       "path": "payload/cloud_redirect.so",
       "class": "module-executable"
+    },
+    {
+      "path": "views/cloud-saves/index.js",
+      "class": "module-executable"
+    },
+    {
+      "path": "views/cloud-saves/index.css",
+      "class": "module-executable"
     }
   ],
   "runtime_content": []

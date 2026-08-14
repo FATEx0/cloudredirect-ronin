@@ -80,17 +80,18 @@ paths stay low-conflict; none of them are built or packaged by Ronin.
 
 ## Settings exposure
 
-CloudRedirect's own `config.json` (cloud-provider selection, credentials,
-per-app overrides) is not exposed through `module/settings.json` yet. Per
-Tsuki's own deferred-work tracking, the external configuration bridge is
-currently a strict, line-preserving adapter built for SLSsteam's YAML
-scalars, not a generic JSON-object editor. Building that adapter — with an
-atomic, unknown-key-preserving JSON object contract, a full inventory of
-CloudRedirect's current keys/types/defaults/restart-behavior, and secret
-separation so provider credentials never leak through ordinary schema/log
-RPCs — is prerequisite host work, not something this package can shortcut on
-its own. Until then, `module/settings.json` declares only the fixed values
-Ronin currently ships (see that file), not a live-editable surface.
+CloudRedirect's ordinary configuration is exposed through
+`module/settings.json` using Tsuki's `json-object` adapter. The adapter writes
+`$USER_CONFIG/CloudRedirect/config.json` atomically and preserves keys it does
+not own. Provider credentials remain in provider-specific token files and are
+never exposed through the settings document, hosted view, logs, or ordinary
+host RPCs. Provider selection applies live through RONIN-CLOUD-8; achievement
+and playtime exporter toggles retain their declared Steam-restart boundary.
+
+Per-app fallback save rules live in the separate
+`manual-save-rules.json` approval document. The package-owned Cloud Saves view
+may write that document through its narrow host operation, but it cannot
+override native Steam Auto-Cloud metadata.
 
 ## Steam-update compatibility boundary
 

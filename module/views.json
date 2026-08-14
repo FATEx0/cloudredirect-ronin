@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "views": [
+    {
+      "id": "cloud-saves",
+      "label": "Cloud Saves",
+      "kind": "hosted-page",
+      "entry": "views/cloud-saves/index.js",
+      "style": "views/cloud-saves/index.css",
+      "target": {"host": "tsuki-overlay", "slot": "module-page"},
+      "imports": [
+        "tsuki.cloudredirect.status",
+        "tsuki.cloudredirect.auth.begin",
+        "tsuki.cloudredirect.auth.poll",
+        "tsuki.cloudredirect.auth.signout",
+        "tsuki.cloudredirect.apps.list",
+        "tsuki.cloudredirect.remote.list",
+        "tsuki.cloudredirect.sync.begin",
+        "tsuki.cloudredirect.sync.status",
+        "tsuki.cloudredirect.manual.candidates",
+        "tsuki.cloudredirect.manual.configure",
+        "tsuki.desktop.url.open"
+      ]
+    }
+  ]
+}

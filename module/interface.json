@@ -7,7 +7,137 @@
     "max_outstanding_requests": 16
   },
   "control": [],
-  "imports": [],
+  "imports": [
+    {
+      "id": "tsuki.cloudredirect.status",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.status/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.status/1/response",
+      "idempotency": "read-only",
+      "effects": [
+        "none"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.auth.begin",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.auth.begin/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.auth.begin/1/response",
+      "idempotency": "non-repeatable",
+      "effects": [
+        "network"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.auth.poll",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.auth.poll/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.auth.poll/1/response",
+      "idempotency": "read-only",
+      "effects": [
+        "none"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.auth.signout",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.auth.signout/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.auth.signout/1/response",
+      "idempotency": "idempotency-keyed",
+      "effects": [
+        "secret",
+        "module-config"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.apps.list",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.apps.list/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.apps.list/1/response",
+      "idempotency": "read-only",
+      "effects": [
+        "none"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.remote.list",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.remote.list/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.remote.list/1/response",
+      "idempotency": "read-only",
+      "effects": [
+        "network"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.sync.begin",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.sync.begin/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.sync.begin/1/response",
+      "idempotency": "non-repeatable",
+      "effects": [
+        "network"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.sync.status",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.sync.status/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.sync.status/1/response",
+      "idempotency": "read-only",
+      "effects": [
+        "none"
+      ]
+    },
+    {
+      "id": "tsuki.cloudredirect.manual.candidates",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.manual.candidates/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.manual.candidates/1/response",
+      "idempotency": "read-only",
+      "effects": ["none"]
+    },
+    {
+      "id": "tsuki.cloudredirect.manual.configure",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.cloudredirect.manual.configure/1/request",
+      "response": "ronin://host/tsuki.cloudredirect.manual.configure/1/response",
+      "idempotency": "idempotency-keyed",
+      "effects": ["module-config"]
+    },
+    {
+      "id": "tsuki.desktop.url.open",
+      "version": "1",
+      "required": true,
+      "execution": "immediate",
+      "request": "ronin://host/tsuki.desktop.url.open/1/request",
+      "response": "ronin://host/tsuki.desktop.url.open/1/response",
+      "idempotency": "non-repeatable",
+      "effects": [
+        "process"
+      ]
+    }
+  ],
   "event_imports": [],
   "exports": [],
   "events": [],

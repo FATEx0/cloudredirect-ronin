@@ -1,7 +1,10 @@
 {
   description = "CloudRedirect (Ronin)";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+  # Build the copied module payload against a conservative userspace ABI.
+  # Tracking unstable made the ELF require the build host's GLIBC 2.38 and
+  # embedded absolute Nix-store RUNPATHs, which is not a portable module.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-21.11";
 
   outputs =
     {

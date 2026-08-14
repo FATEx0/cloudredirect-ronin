@@ -1,0 +1,53 @@
+:root { font: 14px "Motiva Sans", Arial, sans-serif; color: #d6d7d8; background: transparent!important; }
+* { box-sizing: border-box; }
+html,body { margin:0; background:transparent!important; }
+.cloud-saves-page { padding:2px 2px 24px; }
+.config-card,.save-card { border:1px solid rgba(255,255,255,.08); border-radius:7px; background:rgba(0,0,0,.15); }
+.config-card { padding:2px 14px; }
+.setting-row { min-height:58px; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:11px 0; border-bottom:1px solid rgba(255,255,255,.07); }
+.setting-row:last-child { border-bottom:0; }
+.setting-copy { min-width:0; display:block; }
+.setting-copy strong,.setting-copy small,.save-copy strong,.save-copy small { display:block; }
+.setting-copy strong,.save-copy strong { color:#eef1f4; font-weight:500; }
+.setting-copy small,.save-copy small { margin-top:3px; color:#89949f; font-size:11px; line-height:1.35; }
+select,.game-search { height:38px; padding:0 11px; border:1px solid #3c4652; border-radius:4px; outline:0; background:#1d2127; color:#e6e9ec; font:inherit; }
+select:focus,.game-search:focus { border-color:#1a9fff; }
+.action { min-width:84px; padding:8px 13px; border:1px solid #1a9fff; border-radius:4px; background:#147bb8; color:white; font:inherit; cursor:pointer; }
+.action.secondary { border-color:#46515d; background:#262d35; color:#c7d5e0; }
+.action:disabled { opacity:.55; }
+.message { min-height:0; margin:8px 0; color:#929ca5; }
+.message:empty { display:none; }
+.message.error { color:#ec7b7b; }.message.success { color:#7fd49c; }.message.working { color:#c7d5e0; }
+.game-section { margin-top:20px; }
+.section-heading { display:flex; align-items:center; gap:8px; margin-bottom:8px; color:#c7d5e0; font-size:13px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; }
+.section-count { min-width:20px; padding:1px 6px; border-radius:9px; background:#303640; color:#929ca5; font-size:10px; text-align:center; }
+.page-toolbar { display:flex; gap:8px; margin-bottom:12px; }.game-search { min-width:0; flex:1; }.account-select { max-width:190px; }
+.save-list { display:grid; gap:10px; }.save-card { min-height:72px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px; padding:13px 14px; }
+.game-art { width:120px; height:45px; flex:0 0 auto; border-radius:3px; object-fit:cover; background:#1b1e24; }
+.game-art.missing { visibility:hidden; }
+.save-copy { min-width:0; flex:1 1 auto; }
+.location { flex:0 0 auto; padding:3px 9px; border-radius:10px; background:#303640; color:#aeb5bc; font-size:11px; }
+.location.synced { background:#244934; color:#7fd49c; }.location.cloud { background:#123f5a; color:#66c0f4; }
+.save-badges { display:flex; align-items:center; gap:6px; flex:0 0 auto; }
+.category { padding:3px 9px; border-radius:10px; background:#343943; color:#b8c1ca; font-size:11px; }
+.category.steam-auto-cloud { background:#26384a; color:#66c0f4; }
+.category.manual { background:#443a27; color:#e4bd72; }
+.category.unconfigured { background:#3e3333; color:#d49a9a; }
+.icon-action { flex:0 0 auto; width:38px; height:38px; padding:0; display:grid; place-items:center;
+  border:1px solid #3c4652; border-radius:4px; background:#1d2127; color:#66c0f4;
+  cursor:pointer; }
+.icon-action:hover { border-color:rgba(102,192,244,.55); background:#252c35; color:#9bd7fa; }
+.icon-action:disabled { opacity:.55; cursor:default; }
+.empty { padding:22px; border:1px dashed #49515b; border-radius:6px; color:#929ca5; text-align:center; }
+.manual-editor { width:100%; display:flex; gap:10px; align-items:flex-end; color:#aeb5bc; font-size:11px; }
+.manual-choices { min-width:220px; flex:1; display:grid; gap:2px; padding:5px;
+  border:1px solid #3c4652; border-radius:4px; background:#1d2127; }
+.manual-choice { display:flex; align-items:center; gap:9px; padding:7px 8px; border-radius:3px; cursor:pointer; }
+.manual-choice:hover { background:#252c35; }
+.manual-choice input { accent-color:#1a9fff; }
+.manual-choice strong,.manual-choice small { display:block; }
+.manual-choice strong { color:#d6d7d8; font-weight:500; }
+.manual-choice small { margin-top:2px; color:#89949f; }
+.selection-error { color:#ec7b7b; }
+[hidden] { display:none!important; }
+@media(max-width:620px){.setting-row{align-items:flex-start}.page-toolbar{display:grid}.account-select{max-width:none}.save-card{min-height:58px}.game-art{width:96px;height:36px}}

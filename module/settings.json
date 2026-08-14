@@ -1,8 +1,9 @@
 {
   "schema_version": "2.0",
   "storage": {
-    "adapter": "tsuki-json",
-    "path": "$MODULE_CONFIG/settings.json",
+    "adapter": "json-object",
+    "path": "$USER_CONFIG/CloudRedirect/config.json",
+    "preserve_unknown": true,
     "atomic": true,
     "ownership": {
       "mode": "host",
@@ -12,5 +13,42 @@
   "groups": [
     { "id": "general", "label": "General", "order": 0 }
   ],
-  "fields": []
+  "fields": [
+    {
+      "key": "provider",
+      "type": "enum",
+      "default": "local",
+      "tier": "basic",
+      "label": "Storage provider",
+      "description": "Choose where CloudRedirect stores synchronized saves.",
+      "note": "After selecting Google Drive or OneDrive, open Cloud Saves and select Sign in.",
+      "apply": {"mode": "external-file-live", "target": "cloud-hook"},
+      "options": [
+        {"value": "local", "label": "Local only"},
+        {"value": "gdrive", "label": "Google Drive — sign in on Cloud Saves"},
+        {"value": "onedrive", "label": "OneDrive — sign in on Cloud Saves"}
+      ],
+      "ui": {"widget": "select", "group": "general", "order": 0}
+    },
+    {
+      "key": "sync_achievements",
+      "type": "bool",
+      "default": false,
+      "tier": "basic",
+      "label": "Sync achievements",
+      "description": "Export achievement state alongside cloud saves.",
+      "apply": {"mode": "steam-restart", "target": "cloud-hook"},
+      "ui": {"widget": "toggle", "group": "general", "order": 10}
+    },
+    {
+      "key": "sync_playtime",
+      "type": "bool",
+      "default": false,
+      "tier": "basic",
+      "label": "Sync playtime",
+      "description": "Export playtime state alongside cloud saves.",
+      "apply": {"mode": "steam-restart", "target": "cloud-hook"},
+      "ui": {"widget": "toggle", "group": "general", "order": 20}
+    }
+  ]
 }

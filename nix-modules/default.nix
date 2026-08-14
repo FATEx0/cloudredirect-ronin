@@ -8,7 +8,7 @@ pkgs.pkgsi686Linux.stdenv.mkDerivation {
   version = "${rev}";
   src = ../.;
 
-  nativeBuildInputs = [ pkgs.cmake ];
+  nativeBuildInputs = [ pkgs.cmake pkgs.patchelf ];
 
   # steamclient.so is 32-bit; Steam's own libstdc++ ABI expectation is the
   # pre-C++11 std::string/std::list layout CMakeLists.txt already selects via
@@ -35,6 +35,13 @@ pkgs.pkgsi686Linux.stdenv.mkDerivation {
     mkdir -p $out
     cp build/cloud_redirect.so $out/
     runHook postInstall
+  '';
+
+  # module/payload is copied out of the Nix store and must load from Steam's
+  # runtime on another machine. Retaining build-host store paths would make
+  # the artifact depend on an unregistered, garbage-collectable closure.
+  postFixup = ''
+    patchelf --remove-rpath $out/cloud_redirect.so
   '';
 
   meta = {

@@ -12,6 +12,10 @@
   ],
   "capabilities": [
     {
+      "id": "steam.ui.hosted-view",
+      "reason": "Render the package-owned cloud save management page in Tsuki"
+    },
+    {
       "id": "steam.launch.preload-library",
       "reason": "Install the CloudRedirect hook at Steam launch"
     },
@@ -98,6 +102,7 @@
     "settings": "settings.json",
     "interface": "interface.json",
     "resources": "resources.json",
-    "content": "content.json"
+    "content": "content.json",
+    "views": "views.json"
   }
 }
