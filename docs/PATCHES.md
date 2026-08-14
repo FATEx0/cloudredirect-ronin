@@ -283,7 +283,7 @@ has no notion of it.
 - `src/platform/linux/init.cpp`'s `PublishRoninEvidence()` writes
   `$TSUKI_RONIN_RUNTIME_DIR_M636C6F75647265646972656374/ready.json` (`observed_at`,
   `process_instance`, `status`) once hooks are confirmed installed.
-  `RONIN_ENV_ID` (the `CLOUDREDIRECT` suffix) is generated at CMake
+  `RONIN_ENV_ID` (the `M<HEX_UTF8_MODULE_ID>` suffix) is generated at CMake
   configure time from `module/module.json`'s own `id` field, never
   hand-duplicated.
 - `module/interface.json` declares this as `carrier: "runtime-file"`,
@@ -313,6 +313,55 @@ None — purely a Ronin/Tsuki host contract.
 Retire only if this package grows a real companion process for some other
 reason and adopts `companion-export` instead, or if Tsuki's evidence
 contract changes shape.
+
+## RONIN-CLOUD-8: live provider and manual-save management bridge
+
+**Requirement**
+
+Tsuki must be able to change CloudRedirect's provider, initiate a provider
+reconciliation, and approve a fallback save location for a Proton title
+without restarting Steam. A manual rule must never replace or augment a
+developer-authored Steam Auto-Cloud declaration.
+
+**Why upstream does not satisfy it**
+
+Upstream configures its Linux provider once during initialization and has no
+Tsuki-hosted management surface. Its Auto-Cloud scanner only consumes Steam
+metadata.
+
+**Implementation**
+
+- `src/platform/linux/cloud_hooks.cpp` watches the package bridge files,
+  serializes provider teardown/reinitialization against in-flight storage,
+  handles explicit reconciliation requests, and activates approved manual
+  rules in Steam's live app-info tree.
+- `src/common/manual_save_rules.cpp` parses the separate per-app approval
+  file. It rejects absolute/traversing paths and is consulted only when the
+  effective Proton title has no native Steam rules.
+- `src/common/rpc_handlers.cpp` exposes an idempotent refresh of save-file KV
+  injection so an approved rule becomes active in the current Steam process.
+- The package-owned hosted view and its host imports remain the user-facing
+  side of this bridge; CloudRedirect itself does not embed a UI.
+
+**Acceptance**
+
+- `test/manual_save_rules_tests.cpp` covers enabled/disabled apps, default and
+  explicit patterns, platform selection, and rejection of unsafe paths.
+- Full 32-bit payload build plus Ronin package validation.
+- Controlled live acceptance must confirm provider rebinding and manual-rule
+  activation in a fresh Steam session before release evidence is recorded.
+
+**Upstream overlap**
+
+The storage/provider implementation stays upstream-owned. This patch adds a
+Ronin lifecycle adapter around those APIs and one conservative Auto-Cloud
+fallback; it does not replace the provider engine or upstream batch logic.
+
+**Retirement**
+
+Retire the file bridge if Tsuki gains a standard bidirectional native-module
+control transport. Retire manual rules if Steam exposes equivalent metadata
+for the affected title.
 
 ## Explicitly retired Moon integration
 

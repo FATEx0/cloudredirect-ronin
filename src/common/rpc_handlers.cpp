@@ -324,6 +324,16 @@ static void EnsureSaveFilesInjected(uint32_t appId) {
     }
 }
 
+bool RefreshSaveFilesInjection(uint32_t appId) {
+    {
+        std::lock_guard<std::mutex> lock(g_saveFilesInjectedMutex);
+        g_saveFilesInjected.erase(appId);
+    }
+    EnsureSaveFilesInjected(appId);
+    std::lock_guard<std::mutex> lock(g_saveFilesInjectedMutex);
+    return g_saveFilesInjected.count(appId) != 0;
+}
+
 // g_lastVerifiedCN removed -- session lock in unified state file prevents concurrent writes.
 
 // Strip Steam root token prefix plus any \r\n between token and path.

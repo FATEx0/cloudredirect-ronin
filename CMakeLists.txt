@@ -53,13 +53,15 @@ set(CR_SO_VERSION "${CR_RELEASE_VERSION}+${GIT_SHA}")
 
 # ── Read Ronin module id from module/module.json ────────────────────────
 # Single source of truth for the env-var namespace Tsuki's
-# steamlaunchext.lua uses for this module's runtime bindings (env_id():
-# upper + non-[A-Z0-9] -> "_"). Do not hardcode this token anywhere else.
+# steamlaunchext.lua uses for this module's shared-process runtime bindings:
+# M followed by the uppercase hexadecimal UTF-8 bytes of the module id. Do not
+# hardcode this token anywhere else.
 file(READ "${CMAKE_SOURCE_DIR}/module/module.json" MODULE_JSON_CONTENT)
 string(REGEX MATCH "\"id\"[ \t]*:[ \t]*\"([^\"]+)\"" _ "${MODULE_JSON_CONTENT}")
 set(RONIN_MODULE_ID "${CMAKE_MATCH_1}")
-string(TOUPPER "${RONIN_MODULE_ID}" RONIN_ENV_ID)
-string(REGEX REPLACE "[^A-Z0-9]" "_" RONIN_ENV_ID "${RONIN_ENV_ID}")
+string(HEX "${RONIN_MODULE_ID}" RONIN_MODULE_ID_HEX)
+string(TOUPPER "${RONIN_MODULE_ID_HEX}" RONIN_MODULE_ID_HEX)
+set(RONIN_ENV_ID "M${RONIN_MODULE_ID_HEX}")
 
 # ── Common sources (platform-agnostic) ──────────────────────────────────
 
@@ -87,6 +89,7 @@ set(COMMON_SOURCES
     src/common/sigv4.cpp
     src/common/sha256_hmac.cpp
     src/common/autocloud_scan.cpp
+    src/common/manual_save_rules.cpp
     src/common/steam_kv_injector.cpp
     src/common/parental_bypass.cpp
     src/common/metadata_sync.cpp
@@ -140,6 +143,14 @@ else()
         src/platform/linux/file_util.cpp
     )
 endif()
+
+add_executable(manual_save_rules_tests
+    test/manual_save_rules_tests.cpp
+    src/common/manual_save_rules.cpp
+    src/common/json.cpp
+)
+target_include_directories(manual_save_rules_tests PRIVATE src/common src/platform/linux)
+add_test(NAME manual_save_rules_tests COMMAND manual_save_rules_tests)
 
 # ── Build target ────────────────────────────────────────────────────────
 

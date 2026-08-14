@@ -23,15 +23,16 @@ rollback-tsuki-module:
 		{ echo "usage: make rollback-tsuki-module TSUKI_ROOT=/path/to/tsuki"; exit 2; }
 	sh scripts/deploy-tsuki-module.sh --rollback "$(TSUKI_ROOT)"
 
-# The two Ronin-added tests are header-only, ABI-independent logic
-# (lua_discovery.h, init_stop.h) and build fine as native binaries; they
+# The Ronin-added focused tests are ABI-independent logic and build as native
+# binaries; they
 # don't need the 32-bit steamclient-matching toolchain build above.
 test:
 	nix develop --command bash -c ' \
 		cmake -S . -B build-test -DCMAKE_BUILD_TYPE=Release && \
-		cmake --build build-test --target linux_lua_discovery_tests linux_init_stop_tests -j$$(nproc) && \
+		cmake --build build-test --target linux_lua_discovery_tests linux_init_stop_tests manual_save_rules_tests -j$$(nproc) && \
 		./build-test/linux_lua_discovery_tests && \
-		./build-test/linux_init_stop_tests'
+		./build-test/linux_init_stop_tests && \
+		./build-test/manual_save_rules_tests'
 
 clean:
 	rm -rf result build-test module/payload/cloud_redirect.so

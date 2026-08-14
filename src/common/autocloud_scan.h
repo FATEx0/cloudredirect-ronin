@@ -40,9 +40,22 @@ ScanResult GetFileList(const std::string& steamPath,
 // Returns true if appmanifest_<appId>.acf exists in any library.
 bool IsAppInstalled(const std::string& steamPath, uint32_t appId);
 
+// Enumerate installed app manifests across the main Steam library and every
+// libraryfolders.vdf entry. Used by the management UI's safety inventory.
+std::vector<uint32_t> GetInstalledAppIds(const std::string& steamPath);
+
 // Parse AutoCloud savefiles rules from appinfo.vdf for KV injection.
 std::vector<AutoCloudUtil::AutoCloudRuleNative> GetRules(
     const std::string& steamPath, uint32_t appId, uint32_t accountId = 0);
+
+// True only when Steam itself declares savefiles rules. Manual fallback rules
+// are deliberately excluded so callers can enforce the no-override invariant.
+bool HasNativeRules(const std::string& steamPath, uint32_t appId,
+                    uint32_t accountId = 0);
+
+// True when a user-approved fallback exists for this app. This does not imply
+// it is effective: callers must still enforce native-rule precedence.
+bool HasManualRules(uint32_t appId);
 
 // Get raw rootoverrides for an app from appinfo.vdf.
 // Returns empty vector if app has no rootoverrides or appinfo can't be parsed.

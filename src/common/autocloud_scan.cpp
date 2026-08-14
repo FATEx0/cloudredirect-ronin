@@ -1,7 +1,9 @@
 #include "autocloud_scan.h"
 #include "autocloud_util.h"
 #include "file_util.h"
+#include "json.h"
 #include "log.h"
+#include "manual_save_rules.h"
 #include "steam_root_ids.h"
 #include "vdf.h"
 #ifdef _WIN32
@@ -608,6 +610,23 @@ static std::vector<uint8_t> ReadAndHashFile(const std::string& path,
 
 namespace AutoCloudScan {
 
+#ifndef _WIN32
+static std::vector<AutoCloudRuleNative> LoadManualRules(uint32_t appId) {
+    const char* xdg = std::getenv("XDG_CONFIG_HOME");
+    const char* home = std::getenv("HOME");
+    std::string base = xdg && *xdg ? xdg : (home && *home ? std::string(home) + "/.config" : "");
+    if (base.empty()) return {};
+    std::ifstream input(base + "/CloudRedirect/manual-save-rules.json", std::ios::binary);
+    if (!input) return {};
+    const std::string text((std::istreambuf_iterator<char>(input)), {});
+    auto rules = ManualSaveRules::Parse(Json::Parse(text), appId);
+    if (!rules.empty())
+        LOG("GetAutoCloudRules: app %u using %zu user-approved manual rule(s)",
+            appId, rules.size());
+    return rules;
+}
+#endif
+
 bool IsAppInstalled(const std::string& steamPath, uint32_t appId) {
     for (const auto& libPath : GetSteamLibraryPaths(steamPath)) {
         auto manifestPath = libPath / "steamapps" / ("appmanifest_" + std::to_string(appId) + ".acf");
@@ -615,6 +634,30 @@ bool IsAppInstalled(const std::string& steamPath, uint32_t appId) {
         if (std::filesystem::exists(manifestPath, ec) && !ec) return true;
     }
     return false;
+}
+
+std::vector<uint32_t> GetInstalledAppIds(const std::string& steamPath) {
+    std::vector<uint32_t> appIds;
+    for (const auto& libPath : GetSteamLibraryPaths(steamPath)) {
+        const auto steamapps = libPath / "steamapps";
+        std::error_code ec;
+        std::filesystem::directory_iterator it(steamapps, ec), end;
+        while (!ec && it != end) {
+            const auto& entry = *it++;
+            if (!entry.is_regular_file(ec) || ec) { ec.clear(); continue; }
+            const std::string name = entry.path().filename().string();
+            if (name.rfind("appmanifest_", 0) != 0 || name.size() <= 16 ||
+                name.substr(name.size() - 4) != ".acf") continue;
+            const std::string digits = name.substr(12, name.size() - 16);
+            char* tail = nullptr;
+            const unsigned long value = std::strtoul(digits.c_str(), &tail, 10);
+            if (tail && *tail == '\0' && value > 0 && value <= UINT32_MAX)
+                appIds.push_back(static_cast<uint32_t>(value));
+        }
+    }
+    std::sort(appIds.begin(), appIds.end());
+    appIds.erase(std::unique(appIds.begin(), appIds.end()), appIds.end());
+    return appIds;
 }
 
 ScanResult GetFileList(const std::string& steamPath,
@@ -628,8 +671,15 @@ ScanResult GetFileList(const std::string& steamPath,
                effectivePlatform == AutoCloudEffectivePlatform::Linux ? "Linux" : "Current");
 
     auto rules = LoadAutoCloudRules(steamPath, appId, effectivePlatform);
+#ifndef _WIN32
+    // Keep bootstrap/restore scanning aligned with KV injection. Native Steam
+    // rules remain authoritative; a user-approved Proton rule is considered
+    // only when Steam declares none for the title.
+    if (rules.empty() && effectivePlatform == AutoCloudEffectivePlatform::Windows)
+        rules = LoadManualRules(appId);
+#endif
     if (rules.empty()) {
-        LOG("GetAutoCloudFileList: no appinfo UFS save rules for app %u", appId);
+        LOG("GetAutoCloudFileList: no native or approved save rules for app %u", appId);
         outResult.complete = true; // no rules = nothing to scan, trivially complete
         return outResult;
     }
@@ -1111,8 +1161,67 @@ ScanResult GetFileList(const std::string& steamPath,
 
 std::vector<AutoCloudUtil::AutoCloudRuleNative> GetRules(
     const std::string& steamPath, uint32_t appId, uint32_t accountId) {
-    (void)accountId;
-    return LoadAutoCloudRules(steamPath, appId, AutoCloudEffectivePlatform::Current);
+    // KV injection must use the same effective platform as the disk scanner.
+    // In particular, a Proton title's Windows-only rule must retain its Windows
+    // root token. Treating it as native Linux rewrites WinAppDataLocal to an XDG
+    // root while leaving platforms=windows, which makes Steam watch zero files.
+    const AutoCloudEffectivePlatform effectivePlatform =
+        DetectEffectivePlatform(steamPath, appId, accountId);
+    LOG("GetAutoCloudRules: app %u effective platform=%s",
+        appId, effectivePlatform == AutoCloudEffectivePlatform::Windows ? "Windows" :
+               effectivePlatform == AutoCloudEffectivePlatform::Linux ? "Linux" : "Current");
+    auto rules = LoadAutoCloudRules(steamPath, appId, effectivePlatform);
+#ifndef _WIN32
+    // Steam metadata is authoritative. Manual rules are a fallback only and
+    // can never augment or override a native Auto-Cloud declaration.
+    if (rules.empty() && effectivePlatform == AutoCloudEffectivePlatform::Windows)
+        rules = LoadManualRules(appId);
+#endif
+    return rules;
+}
+
+bool HasNativeRules(const std::string& steamPath, uint32_t appId, uint32_t accountId) {
+    const AutoCloudEffectivePlatform effectivePlatform =
+        DetectEffectivePlatform(steamPath, appId, accountId);
+    const auto native = LoadAutoCloudRules(steamPath, appId, effectivePlatform);
+    if (native.empty()) return false;
+#ifndef _WIN32
+    // Live manual activation writes the approved rules into Steam's in-memory
+    // app-info tree. Subsequent reads must not relabel our own injected values
+    // as developer-authored Steam Auto-Cloud metadata. A manual rule could only
+    // have been approved while native was absent, so an exact set match is our
+    // injected set, not an override of developer metadata.
+    const auto manual = LoadManualRules(appId);
+    if (native.size() == manual.size() && !manual.empty()) {
+        auto same = [](const AutoCloudRuleNative& a, const AutoCloudRuleNative& b) {
+            return a.root == b.root && a.path == b.path &&
+                   a.pattern == b.pattern && a.recursive == b.recursive &&
+                   a.platforms == b.platforms;
+        };
+        std::vector<bool> matched(manual.size(), false);
+        bool equivalent = true;
+        for (const auto& n : native) {
+            bool found = false;
+            for (size_t i = 0; i < manual.size(); ++i) {
+                if (!matched[i] && same(n, manual[i])) {
+                    matched[i] = true; found = true; break;
+                }
+            }
+            if (!found) { equivalent = false; break; }
+        }
+        if (equivalent) return false;
+    }
+#endif
+    return true;
+}
+
+bool HasManualRules(uint32_t appId) {
+#ifndef _WIN32
+    return !LoadManualRules(appId).empty();
+#else
+    (void)appId;
+    return false;
+#endif
 }
 
 // GetRootOverrides - exposes raw rootoverrides for cross-platform mapping

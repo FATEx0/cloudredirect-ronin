@@ -59,6 +59,10 @@ void ShutdownRpcHandlers();
 void RecordConflictResolution(uint32_t appId, bool choseLocal);
 bool ConsumeConflictLocalChoice(uint32_t appId);
 
+// Re-evaluate and inject newly approved save rules into Steam's live appinfo
+// cache. Safe to call repeatedly; native Steam rules remain authoritative.
+bool RefreshSaveFilesInjection(uint32_t appId);
+
 // Flush pending sync icon states to registry.vdf (Linux, called from OnUnload).
 void FlushPendingSyncStates();
 

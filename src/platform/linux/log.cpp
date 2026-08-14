@@ -16,8 +16,30 @@ static char g_logPathBuf[512] = {};
 static constexpr long MAX_LOG_SIZE = 10 * 1024 * 1024;
 
 #ifndef RONIN_ENV_ID
-#define RONIN_ENV_ID "CLOUDREDIRECT"
+#define RONIN_ENV_ID "M636C6F75647265646972656374"
 #endif
+
+// mkdir -p for the parent of a bounded absolute file path. This stays on
+// stack storage because Log::Init runs from an LD_PRELOAD constructor before
+// it is safe to depend on C++ heap-backed filesystem helpers.
+static void EnsureParentDirectories(const char* path)
+{
+    if (!path || path[0] != '/') return;
+    char copy[sizeof(g_logPathBuf)];
+    int written = snprintf(copy, sizeof(copy), "%s", path);
+    if (written < 0 || static_cast<size_t>(written) >= sizeof(copy)) return;
+    char* last = strrchr(copy, '/');
+    if (!last || last == copy) return;
+    *last = '\0';
+    for (char* p = copy + 1; *p; ++p)
+    {
+        if (*p != '/') continue;
+        *p = '\0';
+        mkdir(copy, 0755);
+        *p = '/';
+    }
+    mkdir(copy, 0755);
+}
 
 void Log::Init()
 {
@@ -33,13 +55,7 @@ void Log::Init()
     const char* managed = getenv("TSUKI_RONIN_LOG_FILE_" RONIN_ENV_ID);
     if (managed && managed[0])
     {
-        const char* slash = strrchr(managed, '/');
-        if (slash)
-        {
-            char dir[400];
-            snprintf(dir, sizeof(dir), "%.*s", (int)(slash - managed), managed);
-            mkdir(dir, 0755);
-        }
+        EnsureParentDirectories(managed);
         snprintf(g_logPathBuf, sizeof(g_logPathBuf), "%s", managed);
     }
     else

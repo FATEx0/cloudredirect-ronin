@@ -1,7 +1,7 @@
 #pragma once
 #include <string>
 #include <vector>
-#include <unordered_map>
+#include <map>
 #include <cstdint>
 
 namespace Json {
@@ -14,7 +14,10 @@ struct Value {
     double numVal = 0;
     std::string strVal;
     std::vector<Value> arrVal;
-    std::unordered_map<std::string, Value> objVal;
+    // std::map supports an incomplete mapped type on the conservative GCC 10
+    // toolchain used for the portable Linux payload. Newer libstdc++ happened
+    // to accept the recursive unordered_map form, but it was not portable.
+    std::map<std::string, Value> objVal;
 
     const Value& operator[](const char* key) const;
     const Value& operator[](const std::string& key) const;
@@ -32,9 +35,7 @@ struct Value {
 Value Parse(const std::string& json);
 std::string Stringify(const Value& val);
 
-// Structural equality, independent of object key order. Stringify can't be used
-// to compare values because objVal is an unordered_map and serializes in bucket
-// order, so two equal objects may produce different strings.
+// Structural equality, independent of object key order.
 bool DeepEqual(const Value& a, const Value& b);
 
 // builders

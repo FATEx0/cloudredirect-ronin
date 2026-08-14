@@ -177,7 +177,7 @@ static void CleanLdPreload()
 }
 
 #ifndef RONIN_ENV_ID
-#define RONIN_ENV_ID "CLOUDREDIRECT"
+#define RONIN_ENV_ID "M636C6F75647265646972656374"
 #endif
 
 // Own /proc/<pid>/stat field 22 (start time in clock ticks since boot).
@@ -211,9 +211,10 @@ static unsigned long long OwnProcessStartTicks()
 }
 
 // Ronin runtime-evidence: a fixed-name JSON record inside the host-managed
-// runtime dir (TSUKI_RONIN_RUNTIME_DIR_<id>, namespaced by Tsuki's
-// steamlaunchext.lua env_id() -- RONIN_ENV_ID is generated at configure time
-// from this same module's module.json "id" field, never hand-duplicated).
+// runtime dir (TSUKI_RONIN_RUNTIME_DIR_M<HEX_UTF8_MODULE_ID>, namespaced by
+// Tsuki's steamlaunchext.lua env_id() -- RONIN_ENV_ID is generated at
+// configure time from this same module's module.json "id" field, never
+// hand-duplicated).
 // Tsuki's roninmodule.lua reads this file directly for the "runtime-file"
 // evidence carrier declared in module/interface.json; there is no companion
 // process for CloudRedirect to expose it through an RPC export instead. A
@@ -262,6 +263,14 @@ static void PublishRoninEvidence()
         Log::Warn("Ronin evidence: failed to publish %s", path.c_str());
         remove(tmpPath.c_str());
     }
+}
+
+static void RemoveRoninEvidence()
+{
+    const char* runtimeDir = getenv("TSUKI_RONIN_RUNTIME_DIR_" RONIN_ENV_ID);
+    if (!runtimeDir || !*runtimeDir) return;
+    remove((std::string(runtimeDir) + "/ready.json").c_str());
+    remove((std::string(runtimeDir) + "/ready.json.tmp").c_str());
 }
 
 static void DoInit()
@@ -695,6 +704,11 @@ static void* DeferredInitThread(void*)
 
     if (g_initialized.load(std::memory_order_acquire)) {
         InstallCrashDumpHandler();
+        // runtime-evidence is a continuing readiness assertion, not a startup
+        // receipt. Refresh well inside interface.json's 30-second freshness
+        // window until OnUnload requests the shared process stop signal.
+        while (!LinuxInitStop::ProcessStop().WaitFor(std::chrono::seconds(10)))
+            PublishRoninEvidence();
     }
 
     g_initThreadDone.store(true, std::memory_order_release);
@@ -747,6 +761,9 @@ static void OnUnload()
     // No-op (sync-icon state writer was never wired up); kept for contract.
     CloudIntercept::FlushPendingSyncStates();
 
+    // Stop hooks and the live provider watcher before tearing down storage.
+    CloudHooks::BeginShutdown();
+
     // Shut down cloud storage (signals workers, drains queue with timeout)
     CloudStorage::Shutdown();
 
@@ -755,12 +772,11 @@ static void OnUnload()
 
     if (g_initialized.load(std::memory_order_acquire))
     {
-        CloudHooks::BeginShutdown();
         VtableHook::RemoveHooks(g_vtableInfo);
         VtableHook::RemoveCloudEnabledHook(g_cloudEnabledInfo);
         Log::Info("cloud_redirect.so unloaded");
+        RemoveRoninEvidence();
     }
     if (g_debugFd >= 0)
         close(g_debugFd);
 }
-

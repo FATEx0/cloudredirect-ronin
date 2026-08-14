@@ -12,6 +12,8 @@
 #include "local_storage.h"
 #include "pending_ops_journal.h"
 #include "cloud_storage.h"
+#include "cloud_work_queue.h"
+#include "autocloud_scan.h"
 #include "cloud_provider.h"
 #include "cloud_provider_base.h" // g_uploadInFlightCapBytes
 #include "http_server.h"
@@ -28,11 +30,13 @@
 #include <optional>
 #include <setjmp.h>
 #include <signal.h>
+#include <sstream>
 #include <thread>
 #include <vector>
 #include <unistd.h>
 #include <chrono>
 #include <condition_variable>
+#include <filesystem>
 
 // 32-bit Linux cdecl: all args on stack
 using BYieldingSend_t     = int(*)(void* pThis, const char* method, void* req, void* resp, int* flags);
@@ -61,6 +65,304 @@ static std::thread g_seedThread;
 static std::mutex g_seedExitMtx;
 static std::condition_variable g_seedExitCv;
 static std::atomic<bool> g_seedExited{false};
+static std::thread g_providerWatcherThread;
+static std::atomic<bool> g_providerWatcherStop{false};
+static std::mutex g_providerReconfigureMtx;
+
+static std::string ReadTextFile(const std::string& path) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) return {};
+    return std::string((std::istreambuf_iterator<char>(input)), {});
+}
+
+static bool WriteTextFileAtomic(const std::string& path, const std::string& text) {
+    const std::string temporary = path + ".tmp";
+    {
+        std::ofstream output(temporary, std::ios::binary | std::ios::trunc);
+        if (!output) return false;
+        output.write(text.data(), static_cast<std::streamsize>(text.size()));
+        if (!output) return false;
+    }
+    std::error_code ec;
+    std::filesystem::rename(temporary, path, ec);
+    if (ec) {
+        std::filesystem::remove(temporary, ec);
+        return false;
+    }
+    return true;
+}
+
+static void ProcessForceSyncRequest(const std::string& root) {
+    const std::string requestPath = root + "force-sync.request.json";
+    const std::string requestText = ReadTextFile(requestPath);
+    if (requestText.empty()) return;
+
+    const auto request = Json::Parse(requestText);
+    const std::string requestId = request["id"].str();
+    if (requestId.empty()) {
+        std::error_code ignored;
+        std::filesystem::remove(requestPath, ignored);
+        return;
+    }
+
+    const std::string resultPath = root + "force-sync.result.json";
+    WriteTextFileAtomic(resultPath,
+        "{\"id\":\"" + requestId + "\",\"status\":\"working\"}");
+
+    uint32_t accountId = CloudIntercept::GetAccountId();
+    if (accountId == 0 || !CloudStorage::IsCloudActive()) {
+        const char* error = accountId == 0
+            ? "Steam account is not ready" : "Cloud provider is not connected";
+        WriteTextFileAtomic(resultPath,
+            "{\"id\":\"" + requestId +
+            "\",\"status\":\"error\",\"error\":\"" + error + "\"}");
+    } else {
+        LOG("[ForceSync] Account-wide provider reconciliation requested (account=%u)",
+            accountId);
+        const auto apps = CloudStorage::SyncAllFromCloud(accountId);
+        CloudWorkQueue::DrainQueue();
+        std::ostringstream result;
+        result << "{\"id\":\"" << requestId
+               << "\",\"status\":\"done\",\"count\":" << apps.size() << "}";
+        WriteTextFileAtomic(resultPath, result.str());
+        LOG("[ForceSync] Provider reconciliation complete (account=%u, apps=%zu)",
+            accountId, apps.size());
+    }
+
+    std::error_code ignored;
+    std::filesystem::remove(requestPath, ignored);
+}
+
+static int BootstrapApprovedManualApp(uint32_t accountId, uint32_t appId) {
+    const std::string steamPath = CloudIntercept::GetSteamPath();
+    if (accountId == 0 || steamPath.empty() ||
+        !CloudIntercept::IsNamespaceApp(appId) ||
+        AutoCloudScan::HasNativeRules(steamPath, appId, accountId) ||
+        !AutoCloudScan::HasManualRules(appId)) return -1;
+
+    if (!CloudIntercept::RefreshSaveFilesInjection(appId)) return -1;
+    const auto scan = AutoCloudScan::GetFileList(steamPath, accountId, appId);
+    if (!scan.complete || !scan.hasRules) return -1;
+
+    CloudStorage::CloudAppState state;
+    if (CloudStorage::IsCloudActive()) {
+        const auto fetched = CloudStorage::FetchCloudState(accountId, appId);
+        if (fetched.status == CloudStorage::StateFetchStatus::Ok) {
+            state = fetched.state;
+            if (!state.files.empty()) {
+                LOG("[ManualRules] app %u already has %zu remote file(s); refusing automatic local overwrite",
+                    appId, state.files.size());
+                return 0;
+            }
+        } else if (fetched.status != CloudStorage::StateFetchStatus::NotFound) {
+            LOG("[ManualRules] app %u remote state unavailable; refusing bootstrap", appId);
+            return -1;
+        }
+    }
+
+    std::unordered_set<std::string> roots = scan.ruleRootTokens;
+    std::unordered_map<std::string, std::string> tokens;
+    int stored = 0;
+    for (const auto& file : scan.files) {
+        std::ifstream input(file.fullPath, std::ios::binary);
+        if (!input) return -1;
+        std::vector<uint8_t> bytes((std::istreambuf_iterator<char>(input)), {});
+        const uint8_t* data = bytes.empty() ? nullptr : bytes.data();
+        if (!CloudStorage::StoreBlob(accountId, appId, file.relativePath,
+                                     data, bytes.size())) return -1;
+        CloudStorage::UpdateManifestEntry(accountId, appId, file.relativePath,
+            file.sha, file.modifiedTime, file.size);
+        CloudStorage::FileEntry entry;
+        entry.sha = file.sha;
+        entry.timestamp = file.modifiedTime;
+        entry.size = file.size;
+        state.files[file.relativePath] = std::move(entry);
+        if (!file.rootToken.empty()) {
+            roots.insert(file.rootToken);
+            tokens[file.relativePath] = file.rootToken;
+        }
+        ++stored;
+    }
+    if (!CloudWorkQueue::DrainQueueForApp(accountId, appId)) return -1;
+    LocalMetadataStore::SaveRootTokens(accountId, appId, roots);
+    LocalMetadataStore::SaveFileTokens(accountId, appId, tokens, roots);
+    state.cn = std::max<uint64_t>(state.cn, LocalStorage::GetChangeNumber(accountId, appId)) + 1;
+    if (CloudStorage::IsCloudActive() &&
+        !CloudStorage::PublishCloudState(accountId, appId, state)) return -1;
+    LocalStorage::SetChangeNumber(accountId, appId, state.cn);
+    LOG("[ManualRules] app %u activated live and bootstrapped %d file(s) at CN=%llu",
+        appId, stored, (unsigned long long)state.cn);
+    return stored;
+}
+
+static void ProcessManualRuleRequest(const std::string& root) {
+    const std::string requestPath = root + "manual-rule.request.json";
+    const auto request = Json::Parse(ReadTextFile(requestPath));
+    const std::string requestId = request["id"].str();
+    const uint32_t appId = static_cast<uint32_t>(request["app_id"].number());
+    if (requestId.empty() || appId == 0) return;
+    const int files = BootstrapApprovedManualApp(CloudIntercept::GetAccountId(), appId);
+    std::ostringstream result;
+    result << "{\"id\":\"" << requestId << "\",\"success\":"
+           << (files >= 0 ? "true" : "false");
+    if (files >= 0) result << ",\"files\":" << files;
+    else result << ",\"error\":\"live activation failed\"";
+    result << "}";
+    WriteTextFileAtomic(root + "manual-rule.result.json", result.str());
+    std::error_code ignored;
+    std::filesystem::remove(requestPath, ignored);
+}
+
+static void WriteAutoCloudStatus(const std::string& root) {
+    Json::Value document = Json::Object();
+    document.objVal["schema_version"] = Json::Number(1);
+    Json::Value apps = Json::Object();
+    const std::string steamPath = CloudIntercept::GetSteamPath();
+    const uint32_t accountId = CloudIntercept::GetAccountId();
+    auto inventory = AutoCloudScan::GetInstalledAppIds(steamPath);
+    for (uint32_t appId : CloudIntercept::GetNamespaceApps())
+        inventory.push_back(appId);
+    std::sort(inventory.begin(), inventory.end());
+    inventory.erase(std::unique(inventory.begin(), inventory.end()), inventory.end());
+    for (uint32_t appId : inventory) {
+        Json::Value state = Json::Object();
+        Json::Value native;
+        native.type = Json::Type::Bool;
+        native.boolVal = AutoCloudScan::HasNativeRules(steamPath, appId, accountId);
+        state.objVal["native_autocloud"] = std::move(native);
+        Json::Value installed;
+        installed.type = Json::Type::Bool;
+        installed.boolVal = AutoCloudScan::IsAppInstalled(steamPath, appId);
+        state.objVal["installed"] = std::move(installed);
+        apps.objVal[std::to_string(appId)] = std::move(state);
+    }
+    document.objVal["apps"] = std::move(apps);
+    WriteTextFileAtomic(root + "autocloud-status.json", Json::Stringify(document));
+}
+
+static std::unique_ptr<ICloudProvider> LoadConfiguredProvider(
+    const std::string& cloudRedirectRoot, std::string* outName = nullptr) {
+    const std::string configStr = ReadTextFile(cloudRedirectRoot + "config.json");
+    if (configStr.empty()) {
+        if (outName) *outName = "local";
+        return nullptr;
+    }
+    const auto cfg = Json::Parse(configStr);
+    const std::string providerName = cfg["provider"].str();
+    if (outName) *outName = providerName.empty() ? "local" : providerName;
+    if (providerName.empty() || providerName == "local") return nullptr;
+
+    auto provider = CreateCloudProvider(providerName);
+    if (!provider) {
+        LOG("[Linux] WARNING: Unknown cloud provider '%s', using local-only",
+            providerName.c_str());
+        return nullptr;
+    }
+    const std::string tokenPath = ResolveProviderTokenPath(
+        cloudRedirectRoot, configStr, providerName);
+    LOG("[Linux] Cloud provider '%s': resolving credentials at %s",
+        providerName.c_str(), tokenPath.c_str());
+    if (!provider->Init(tokenPath)) {
+        LOG("[Linux] WARNING: Cloud provider '%s' init failed -- using local-only",
+            providerName.c_str());
+        return nullptr;
+    }
+    if (!provider->IsAuthenticated()) {
+        LOG("[Linux] WARNING: %s configured but not authenticated -- local-only until signed in",
+            provider->Name());
+        provider->Shutdown();
+        return nullptr;
+    }
+    LOG("[Linux] Cloud provider '%s' initialized (tokens: %s)",
+        provider->Name(), tokenPath.c_str());
+    return provider;
+}
+
+static uint64_t ProviderConfigSignature(const std::string& root) {
+    struct WatchedFile {
+        const char* name;
+        bool contentsMatter;
+    };
+    static const WatchedFile files[] = {
+        {"config.json", true},
+        // OAuth providers persist refreshed access tokens themselves. Watching
+        // token mtimes/sizes made that internal write look like an operator
+        // reconfiguration and could tear down a provider while another thread
+        // was using it. Presence is enough for live sign-in/sign-out: the UI
+        // creates or removes these files, while routine refreshes only replace
+        // an existing file.
+        {"tokens_gdrive.json", false},
+        {"tokens_onedrive.json", false},
+        {"google_tokens.json", false},
+        {"onedrive_tokens.json", false},
+        // Static-provider credentials do not refresh themselves, so an
+        // in-place credential update must continue to rebind the provider.
+        {"r2_credentials.json", true},
+        {"s3_credentials.json", true},
+    };
+    uint64_t signature = 1469598103934665603ULL;
+    for (const auto& file : files) {
+        std::error_code ec;
+        const auto path = std::filesystem::path(root) / file.name;
+        const bool exists = std::filesystem::exists(path, ec) && !ec;
+        signature ^= exists ? 1ULL : 0ULL;
+        signature *= 1099511628211ULL;
+        if (exists && file.contentsMatter) {
+            auto stamp = std::filesystem::last_write_time(path, ec);
+            if (!ec) {
+                signature ^= static_cast<uint64_t>(stamp.time_since_epoch().count());
+                signature *= 1099511628211ULL;
+            }
+            auto size = std::filesystem::file_size(path, ec);
+            if (!ec) { signature ^= size; signature *= 1099511628211ULL; }
+        }
+    }
+    return signature;
+}
+
+static void StartProviderWatcher(const std::string& cloudRedirectRoot) {
+    g_providerWatcherStop.store(false, std::memory_order_release);
+    g_providerWatcherThread = std::thread([cloudRedirectRoot] {
+        uint64_t signature = ProviderConfigSignature(cloudRedirectRoot);
+        while (!g_providerWatcherStop.load(std::memory_order_acquire)) {
+            for (int i = 0; i < 5 && !g_providerWatcherStop.load(std::memory_order_acquire); ++i)
+                usleep(100000);
+            if (g_providerWatcherStop.load(std::memory_order_acquire)) break;
+            if (std::filesystem::exists(cloudRedirectRoot + "force-sync.request.json")) {
+                std::lock_guard<std::mutex> lock(g_providerReconfigureMtx);
+                if (!g_providerWatcherStop.load(std::memory_order_acquire))
+                    ProcessForceSyncRequest(cloudRedirectRoot);
+            }
+            if (std::filesystem::exists(cloudRedirectRoot + "manual-rule.request.json")) {
+                std::lock_guard<std::mutex> lock(g_providerReconfigureMtx);
+                if (!g_providerWatcherStop.load(std::memory_order_acquire))
+                    ProcessManualRuleRequest(cloudRedirectRoot);
+            }
+            const uint64_t next = ProviderConfigSignature(cloudRedirectRoot);
+            if (next == signature) continue;
+            // Atomic writers commonly publish config and token files as two
+            // adjacent renames. Debounce once so we rebind to the final pair.
+            usleep(300000);
+            signature = ProviderConfigSignature(cloudRedirectRoot);
+            std::lock_guard<std::mutex> lock(g_providerReconfigureMtx);
+            if (g_providerWatcherStop.load(std::memory_order_acquire)) break;
+            std::string providerName;
+            auto provider = LoadConfiguredProvider(cloudRedirectRoot, &providerName);
+            LOG("[Linux] Live provider reconfigure requested: %s",
+                providerName.empty() ? "local" : providerName.c_str());
+            CloudStorage::Shutdown();
+            CloudStorage::Init(cloudRedirectRoot, std::move(provider));
+            LOG("[Linux] Live provider reconfigure complete: %s (active=%d)",
+                providerName.empty() ? "local" : providerName.c_str(),
+                CloudStorage::IsCloudActive() ? 1 : 0);
+        }
+    });
+}
+
+static void StopProviderWatcher() {
+    g_providerWatcherStop.store(true, std::memory_order_release);
+    if (g_providerWatcherThread.joinable()) g_providerWatcherThread.join();
+}
 
 struct HookGuard {
     HookGuard() { g_hookRefCount.fetch_add(1, std::memory_order_acquire); }
@@ -347,43 +649,13 @@ static void EnsureInitialized() {
                 MetadataSync::syncPlaytime.load() ? 1 : 0,
                 MetadataSync::schemaFetch.load() ? 1 : 0);
 
-            if (!providerName.empty() && providerName != "local") {
-                provider = CreateCloudProvider(providerName);
-                if (provider) {
-                    // Resolve the credential path the same way the CLI does:
-                    // config.json token_paths[provider] -> legacy token_path ->
-                    // convention filename (r2_credentials.json etc). Previously
-                    // this hardcoded "tokens_<provider>.json", which silently
-                    // failed for R2 (r2_credentials.json) and left the app in
-                    // local-only mode with no cloud sync.
-                    std::string tokenPath = ResolveProviderTokenPath(
-                        cloudRedirectRoot, configStr, providerName);
-                    LOG("[Linux] Cloud provider '%s': resolving credentials at %s",
-                        providerName.c_str(), tokenPath.c_str());
-                    if (provider->Init(tokenPath)) {
-                        LOG("[Linux] Cloud provider '%s' initialized (tokens: %s)",
-                            provider->Name(), tokenPath.c_str());
-                        if (!provider->IsAuthenticated()) {
-                            LOG("[Linux] WARNING: %s configured but not authenticated -- local-only until signed in",
-                                provider->Name());
-                            provider.reset();
-                        }
-                    } else {
-                        LOG("[Linux] WARNING: Cloud provider '%s' init FAILED (credentials path: %s) -- "
-                            "falling back to local-only. Check the file exists and is readable.",
-                            providerName.c_str(), tokenPath.c_str());
-                        provider.reset();
-                    }
-                } else {
-                    LOG("[Linux] WARNING: Unknown cloud provider '%s', falling back to local-only",
-                        providerName.c_str());
-                }
-            }
+            provider = LoadConfiguredProvider(cloudRedirectRoot);
         } else {
             LOG("[Linux] No config.json at %s -- local-only mode", configPath.c_str());
         }
 
         CloudStorage::Init(cloudRedirectRoot, std::move(provider));
+        StartProviderWatcher(cloudRedirectRoot);
     
         LocalStorage::Init(storageRoot);
         LocalMetadataStore::Init(storageRoot);
@@ -397,6 +669,13 @@ static void EnsureInitialized() {
         StatsStore::SetCloudProvider(
             // pullAll: one download of the account blob, split into per-app entries.
             [](std::unordered_map<uint32_t, std::string>& out) -> bool {
+                // The periodic poller runs independently of live provider
+                // reconfiguration. Register this whole callback with the
+                // shutdown drain before touching g_provider so a provider can
+                // never be destroyed underneath an account-blob download.
+                CloudStorage::InflightSyncScope guard;
+                if (!guard.entered) return false;
+
                 uint32_t accountId = CloudIntercept::GetAccountId();
                 if (accountId == 0) return false;
                 std::vector<uint8_t> data;
@@ -547,8 +826,9 @@ static void EnsureInitialized() {
         // newly added game gets no stats blob until the next Steam restart.
         // (Ronin note: upstream removed the schema-fetch subsystem this
         // callback used to also notify; see docs/PATCHES.md RONIN-CLOUD-1.)
-        CloudIntercept::SetNamespaceAppCallback([](uint32_t appId) {
+        CloudIntercept::SetNamespaceAppCallback([cloudRedirectRoot](uint32_t appId) {
             if (g_shuttingDown.load(std::memory_order_acquire)) return;
+            WriteAutoCloudStatus(cloudRedirectRoot);
             std::thread([appId] {
                 if (g_shuttingDown.load(std::memory_order_acquire)) return;
                 if (MetadataSync::syncAchievements.load(std::memory_order_relaxed) ||
@@ -560,6 +840,7 @@ static void EnsureInitialized() {
         });
 
         g_initialized.store(true, std::memory_order_release);
+        WriteAutoCloudStatus(cloudRedirectRoot);
 
         LOG("[Linux] Storage initialized: root=%s, accountId=%u, namespaceApps=%zu",
             storageRoot.c_str(), CloudIntercept::GetAccountId(),
@@ -938,6 +1219,7 @@ extern "C" bool hook_IsCloudEnabledForApp(void* pThis, unsigned int appId)
 
 void CloudHooks::BeginShutdown() {
     g_shuttingDown.store(true, std::memory_order_release);
+    StopProviderWatcher();
     GamesPlayedHook::Remove();
     LivePlaytime::RemoveUserCapture();
     for (int i = 0; i < 300 && g_hookRefCount.load(std::memory_order_acquire) > 0; ++i)
