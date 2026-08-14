@@ -13,7 +13,7 @@ CloudRedirect runtime behavior do not require separate ledger entries (e.g.
 
 - Upstream: `Selectively11/CloudRedirect`
 - Upstream branch: `master`
-- Current recorded base: `9d0dbbf` (tag `v2.6.3`)
+- Current recorded base: `48113be` (tag `v2.6.4` plus one documentation commit)
 - Downstream branch: `ronin/main`
 - Reference fork (source of adapted patches below): `swwayps/cloudredirect-moon`
 
@@ -281,7 +281,7 @@ has no notion of it.
 **Implementation**
 
 - `src/platform/linux/init.cpp`'s `PublishRoninEvidence()` writes
-  `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` (`observed_at`,
+  `$TSUKI_RONIN_RUNTIME_DIR_M636C6F75647265646972656374/ready.json` (`observed_at`,
   `process_instance`, `status`) once hooks are confirmed installed.
   `RONIN_ENV_ID` (the `CLOUDREDIRECT` suffix) is generated at CMake
   configure time from `module/module.json`'s own `id` field, never

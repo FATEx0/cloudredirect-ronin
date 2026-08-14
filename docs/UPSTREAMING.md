@@ -4,7 +4,7 @@
 
 The branch contract is:
 
-- `master` mirrors `upstream/master` and contains no Ronin commits.
+- `main` mirrors `upstream/master` and contains no Ronin commits.
 - `ronin/main` contains the ordered downstream patch series and complete
   Ronin package.
 - Release tags are immutable points on `ronin/main`.
@@ -27,20 +27,20 @@ Fetch first and inspect the incoming commits:
 
 ```sh
 git fetch upstream
-git log --oneline master..upstream/master
-git diff --stat master..upstream/master
+git log --oneline main..upstream/master
+git diff --stat main..upstream/master
 ```
 
-Update `master` only from a clean worktree. `master` is an upstream mirror,
+Update `main` only from a clean worktree. `main` is an upstream mirror,
 so a fast-forward is required:
 
 ```sh
-git switch master
+git switch main
 git merge --ff-only upstream/master
-git push origin master
+git push origin main
 ```
 
-Never resolve an upstream conflict on `master`, and never add a local commit
+Never resolve an upstream conflict on `main`, and never add a local commit
 there.
 
 ## Reapply the Ronin patch series
@@ -58,7 +58,7 @@ Then:
 
 ```sh
 git switch ronin/main
-git rebase master
+git rebase main
 ```
 
 Resolve conflicts in the downstream patch that owns the requirement.

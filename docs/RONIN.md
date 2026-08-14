@@ -103,7 +103,8 @@ documents for its own optional-pattern inventory.
 
 ## Port status
 
-- [x] Establish current Selectively11 upstream (`v2.6.3`) as the base.
+- [x] Establish current Selectively11 upstream (`48113be`, immediately after
+      `v2.6.4`) as the base.
 - [x] Cherry-pick the CloudRedirect-moon fixes that still target live files
       (RONIN-CLOUD-2 through RONIN-CLOUD-6).
 - [x] Adapt the stplug-in/luaappids/config.yaml discovery feature onto
@@ -164,9 +165,9 @@ documents for its own optional-pattern inventory.
       (2026-07-31): both payloads mapped into the same real 32-bit Steam
       process with no conflicts, both fully initialized (hooks installed,
       log output confirms normal operation), and
-      `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was written with
+      `$TSUKI_RONIN_RUNTIME_DIR_M636C6F75647265646972656374/ready.json` was written with
       the real Steam PID. Found and fixed in the same pass: `Log::Init()`
-      never read `TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT`, always writing to
+      never read `TSUKI_RONIN_LOG_FILE_M636C6F75647265646972656374`, always writing to
       its own default path instead of the one `interface.json` declares.
       Re-verified live in a follow-up session (below) after the fix.
 - [x] Live-validate RONIN-CLOUD-1 (mid-session Lua-managed app discovery),
