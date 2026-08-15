@@ -348,8 +348,12 @@ metadata.
 - `test/manual_save_rules_tests.cpp` covers enabled/disabled apps, default and
   explicit patterns, platform selection, and rejection of unsafe paths.
 - Full 32-bit payload build plus Ronin package validation.
-- Controlled live acceptance must confirm provider rebinding and manual-rule
-  activation in a fresh Steam session before release evidence is recorded.
+- Live, 2026-08-15, fresh Steam session through Tsuki: the packaged payload
+  reloaded Google Drive after an unchanged `config.json` notification and
+  logged `Live provider reconfigure complete: gdrive (active=1)` without a
+  process restart. Re-submitting the existing approved rule for app 250180
+  returned success in the same process; its four remote files caused the
+  safety guard to refuse an automatic local overwrite, as designed.
 
 **Upstream overlap**
 

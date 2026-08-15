@@ -195,3 +195,9 @@ documents for its own optional-pattern inventory.
       risk to any real Steam install. Found and fixed in the same pass:
       `DebugLog()` had no `mkdir()` before its `open()`, so it silently
       never wrote anything on a genuinely fresh install.
+- [x] Live-validate RONIN-CLOUD-8 (2026-08-15) in a fresh Tsuki-launched
+      Steam session with `slssteam-ronin` enabled: both payloads mapped,
+      runtime evidence remained fresh, Google Drive rebound in place with
+      `active=1`, and the existing manual rule for app 250180 was accepted
+      without restart. Its four remote files correctly blocked an automatic
+      local bootstrap overwrite.

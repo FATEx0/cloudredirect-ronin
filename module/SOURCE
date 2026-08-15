@@ -1,5 +1,5 @@
 Repository: https://github.com/FATEx0/cloudredirect-ronin
-Base commit: 71494b41fb336590e5f4741d26c508623e27b0ab
+Base commit: 66d63734817011f25a8236e3d652fce3d6ca1adc
 
 Built with `nix build .#cloud-redirect` under `pkgs.pkgsi686Linux.stdenv`
 (genuine i686 toolchain, not -m32 cross-compilation on a 64-bit compiler --
@@ -7,15 +7,18 @@ see nix-modules/default.nix). This sidesteps CMakeLists.txt's Fedora/Debian
 multilib-path guessing for LINUX_32BIT entirely, since CMAKE_SIZEOF_VOID_P is
 already 4 under that stdenv.
 
-Confirmed ELF32/Intel 80386. NEEDED: libdl.so.2, libpthread.so.0,
-libatomic.so.1, libstdc++.so.6, libm.so.6, libgcc_s.so.1, libc.so.6 -- no
-unexpected dependencies (CloudRedirect's Linux target needs no openssl/curl,
-unlike its Windows target).
+The flake is pinned to the NixOS 21.11 userspace baseline (GCC 10/glibc
+2.33), and the package fixup removes its Nix-store RUNPATH before staging.
 
-test/linux_lua_discovery_tests and test/linux_init_stop_tests both pass
-(the complete test suite -- `ctest -N` confirms exactly these two are
-configured). Built as native 64-bit binaries since both only exercise
-header-only, ABI-independent logic (lua_discovery.h, init_stop.h). Every
+Confirmed ELF32/Intel 80386. NEEDED: libdl.so.2, libpthread.so.0,
+libatomic.so.1, libstdc++.so.6, libm.so.6, libgcc_s.so.1, libc.so.6 and
+ld-linux.so.2. Highest required glibc symbol version: GLIBC_2.33. No RPATH or
+RUNPATH remains, and CloudRedirect's Linux target needs no openssl/curl.
+
+The complete public suite passes: `test/linux_lua_discovery_tests.cpp`,
+`test/linux_init_stop_tests.cpp`, and `test/manual_save_rules_tests.cpp`
+(`ctest` reports 3/3). They build as native binaries because they exercise
+ABI-independent discovery, lifecycle, and configuration logic. Every
 other test name in CMakeLists.txt is gated behind
 `if(EXISTS tests/autocloud_native_tests.cpp)`, upstream's own private
 tests/ directory that isn't part of this repo.
@@ -26,10 +29,27 @@ module/payload/), the same target `make deploy-tsuki-module` and
 
 Packaged artifacts:
 
-29f0afebeffbb8ee74c34388b9e2e365a6f3dd5c2668e414b67b5303deaf5a8e  payload/cloud_redirect.so
+e6ff452e3a6b9da2bafac3fd3d48bbc6f2ffc0659cb049535acfda866e57e512  payload/cloud_redirect.so
 
 `ronin_validate.py` from ronin-module-sdk passes clean (zero failures) as
 of this revision.
+
+**Technical acceptance, 2026-08-15:** the clean 32-bit payload build passed;
+CTest passed 3/3; all 41 `ronin-module-sdk` tests passed; Tsuki's complete Lua
+inventory and all 9 JavaScript suites passed against the atomically deployed
+package. The deployed payload hash matched this package.
+
+**Live acceptance, 2026-08-15 (RONIN-CLOUD-8):** started a fresh Steam session
+through Tsuki with `slssteam-ronin` enabled. Both module payload sets mapped
+from Tsuki's deployed package directories, CloudRedirect published fresh
+runtime evidence for Steam PID 1202358, and authenticated Google Drive
+initialized normally. An unchanged config notification rebound Google Drive
+inside that same Steam process (`active=1`). Re-submitting the existing
+approved manual rule for app 250180 returned success without restart; the
+four files already present remotely correctly caused the bootstrap safety
+guard to refuse an automatic local overwrite. The acceptance request/result
+files were removed afterwards; user configuration and credentials were not
+changed.
 
 **Live acceptance, 2026-07-31 (RONIN-CLOUD-7, and a two-module test):** ran
 a real two-module Tsuki session -- this package and `slssteam-ronin` both
@@ -39,10 +59,11 @@ active, injected into the same real 32-bit Steam process (via a NixOS
 `SLSsteam.so`/`library-inject.so` (LD_AUDIT) all mapped into the same
 process with no env-var collisions (required a namespacing fix in Tsuki's
 `steamlaunchext.lua`, see [[tsuki_multi_launch_extension]] memory). Both
-fully initialized. `$TSUKI_RONIN_RUNTIME_DIR_CLOUDREDIRECT/ready.json` was
+fully initialized. `$TSUKI_RONIN_RUNTIME_DIR_M636C6F75647265646972656374/ready.json` was
 written with the real Steam PID -- the `runtime-file` evidence carrier
 (RONIN-CLOUD-7) confirmed working against a live host. Found and fixed in
-that pass: `Log::Init()` didn't read `TSUKI_RONIN_LOG_FILE_CLOUDREDIRECT`;
+that pass: `Log::Init()` didn't read
+`TSUKI_RONIN_LOG_FILE_M636C6F75647265646972656374`;
 re-verified live in a follow-up session.
 
 **Live acceptance (RONIN-CLOUD-1), same day, follow-up session:** with the
